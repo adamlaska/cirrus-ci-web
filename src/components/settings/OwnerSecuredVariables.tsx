@@ -1,37 +1,44 @@
 import React, { useState } from 'react';
-import environment from '../../createRelayEnvironment';
-import { commitMutation, createFragmentContainer } from 'react-relay';
+import { useMutation, useFragment } from 'react-relay';
+
 import { graphql } from 'babel-plugin-relay/macro';
+
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardActions from '@mui/material/CardActions';
 import CardContent from '@mui/material/CardContent';
 import CardHeader from '@mui/material/CardHeader';
 import FormControl from '@mui/material/FormControl';
-import CopyPasteField from '../common/CopyPasteField';
 import TextField from '@mui/material/TextField';
-import {
-  OwnerSecuredVariablesMutationResponse,
-  OwnerSecuredVariablesMutationVariables,
-} from './__generated__/OwnerSecuredVariablesMutation.graphql';
-import { OwnerSecuredVariables_info } from './__generated__/OwnerSecuredVariables_info.graphql';
 
-const securedVariableMutation = graphql`
-  mutation OwnerSecuredVariablesMutation($input: OwnerSecuredVariableInput!) {
-    securedOwnerVariable(input: $input) {
-      variableName
-    }
-  }
-`;
+import CopyPasteField from 'components/common/CopyPasteField';
+
+import {
+  OwnerSecuredVariablesMutation,
+  OwnerSecuredVariablesMutation$data,
+  OwnerSecuredVariablesMutation$variables,
+} from './__generated__/OwnerSecuredVariablesMutation.graphql';
+import { OwnerSecuredVariables_info$key } from './__generated__/OwnerSecuredVariables_info.graphql';
 
 interface Props {
-  info: OwnerSecuredVariables_info;
+  info: OwnerSecuredVariables_info$key;
 }
 
-function OwnerSecuredVariables(props: Props) {
-  let [securedVariableName, setSecuredVariableName] = useState(undefined);
+export default function OwnerSecuredVariables(props: Props) {
+  let info = useFragment(
+    graphql`
+      fragment OwnerSecuredVariables_info on OwnerInfo {
+        platform
+        uid
+        name
+      }
+    `,
+    props.info,
+  );
+
+  let [securedVariableName, setSecuredVariableName] = useState<string | undefined>(undefined);
   let [inputValue, setInputValue] = useState('');
-  let securedComponent = null;
+  let securedComponent: null | JSX.Element = null;
 
   if (securedVariableName) {
     let valueForYAMLFile = `ENCRYPTED[${securedVariableName}]`;
@@ -39,20 +46,30 @@ function OwnerSecuredVariables(props: Props) {
     securedComponent = <CopyPasteField name="securedVariable" fullWidth={true} value={valueForYAMLFile} />;
   }
 
+  const [commitSecuredVariableMutation] = useMutation<OwnerSecuredVariablesMutation>(graphql`
+    mutation OwnerSecuredVariablesMutation($input: OwnerSecuredVariableInput!) {
+      securedOwnerVariable(input: $input) {
+        variableName
+      }
+    }
+  `);
   function encryptCurrentValue() {
-    const variables: OwnerSecuredVariablesMutationVariables = {
+    const variables: OwnerSecuredVariablesMutation$variables = {
       input: {
-        clientMutationId: props.info.name,
-        platform: props.info.platform,
-        ownerUid: props.info.uid,
+        clientMutationId: info.name,
+        platform: info.platform,
+        ownerUid: info.uid,
         valueToSecure: inputValue,
       },
     };
 
-    commitMutation(environment, {
-      mutation: securedVariableMutation,
+    commitSecuredVariableMutation({
       variables: variables,
-      onCompleted: (response: OwnerSecuredVariablesMutationResponse) => {
+      onCompleted: (response: OwnerSecuredVariablesMutation$data, errors) => {
+        if (errors) {
+          console.log(errors);
+          return;
+        }
         setSecuredVariableName(response.securedOwnerVariable.variableName);
       },
       onError: err => console.error(err),
@@ -83,13 +100,3 @@ function OwnerSecuredVariables(props: Props) {
     </Card>
   );
 }
-
-export default createFragmentContainer(OwnerSecuredVariables, {
-  info: graphql`
-    fragment OwnerSecuredVariables_info on OwnerInfo {
-      platform
-      uid
-      name
-    }
-  `,
-});

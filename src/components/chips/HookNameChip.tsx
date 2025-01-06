@@ -1,34 +1,46 @@
 import React from 'react';
+import { useFragment } from 'react-relay';
+import { useNavigate } from 'react-router-dom';
 
+import { graphql } from 'babel-plugin-relay/macro';
+
+import Functions from '@mui/icons-material/Functions';
 import Avatar from '@mui/material/Avatar';
 import Chip from '@mui/material/Chip';
-import Functions from '@mui/icons-material/Functions';
-import { createFragmentContainer } from 'react-relay';
-import { graphql } from 'babel-plugin-relay/macro';
-import { WithStyles } from '@mui/styles';
-import createStyles from '@mui/styles/createStyles';
-import withStyles from '@mui/styles/withStyles';
-import { navigateHookHelper } from '../../utils/navigateHelper';
-import { useNavigate } from 'react-router-dom';
-import { HookNameChip_hook } from './__generated__/HookNameChip_hook.graphql';
+import { makeStyles } from '@mui/styles';
 
-const styles = theme =>
-  createStyles({
+import { navigateHookHelper } from 'utils/navigateHelper';
+
+import { HookNameChip_hook$key } from './__generated__/HookNameChip_hook.graphql';
+
+const useStyles = makeStyles(theme => {
+  return {
     avatar: {
       backgroundColor: theme.palette.primary.main,
     },
     avatarIcon: {
       color: theme.palette.primary.contrastText,
     },
-  });
+  };
+});
 
-interface Props extends WithStyles<typeof styles> {
-  hook: HookNameChip_hook;
+interface Props {
+  hook: HookNameChip_hook$key;
   className?: string;
 }
 
-let HookNameChip = (props: Props) => {
-  const { hook, className, classes } = props;
+export default function HookNameChip(props: Props) {
+  let hook = useFragment(
+    graphql`
+      fragment HookNameChip_hook on Hook {
+        id
+        name
+      }
+    `,
+    props.hook,
+  );
+  const { className } = props;
+  let classes = useStyles();
   let navigate = useNavigate();
 
   return (
@@ -36,6 +48,7 @@ let HookNameChip = (props: Props) => {
       className={className}
       label={hook.name}
       onClick={e => navigateHookHelper(navigate, e, hook.id)}
+      onAuxClick={e => navigateHookHelper(navigate, e, hook.id)}
       avatar={
         <Avatar className={classes.avatar}>
           <Functions className={classes.avatarIcon} />
@@ -43,13 +56,4 @@ let HookNameChip = (props: Props) => {
       }
     />
   );
-};
-
-export default createFragmentContainer(withStyles(styles)(HookNameChip), {
-  hook: graphql`
-    fragment HookNameChip_hook on Hook {
-      id
-      name
-    }
-  `,
-});
+}

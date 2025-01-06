@@ -1,37 +1,49 @@
 import React from 'react';
-
-import { QueryRenderer } from 'react-relay';
-import { graphql } from 'babel-plugin-relay/macro';
-
-import environment from '../../createRelayEnvironment';
-import BuildDetails from '../../components/builds/BuildDetails';
-import CirrusLinearProgress from '../../components/common/CirrusLinearProgress';
-import NotFound from '../NotFound';
-import { BuildByIdQuery } from './__generated__/BuildByIdQuery.graphql';
+import { useLazyLoadQuery } from 'react-relay';
 import { useParams } from 'react-router-dom';
 
-export default function BuildById(): JSX.Element {
-  let { buildId } = useParams();
-  return (
-    <QueryRenderer<BuildByIdQuery>
-      environment={environment}
-      variables={{ buildId }}
-      query={graphql`
-        query BuildByIdQuery($buildId: ID!) {
-          build(id: $buildId) {
-            ...BuildDetails_build
-          }
+import { graphql } from 'babel-plugin-relay/macro';
+
+import BuildDetails from 'components/builds/BuildDetails';
+import AppBreadcrumbs from 'components/common/AppBreadcrumbs';
+import NotFound from 'scenes/NotFound';
+
+import { BuildByIdQuery } from './__generated__/BuildByIdQuery.graphql';
+
+function BuildByIdStrict(buildId: string) {
+  const response = useLazyLoadQuery<BuildByIdQuery>(
+    graphql`
+      query BuildByIdQuery($buildId: ID!) {
+        build(id: $buildId) {
+          ...BuildDetails_build
+          ...AppBreadcrumbs_build
         }
-      `}
-      render={({ error, props }) => {
-        if (!props) {
-          return <CirrusLinearProgress />;
+        viewer {
+          ...AppBreadcrumbs_viewer
         }
-        if (!props.build) {
-          return <NotFound message={error} />;
-        }
-        return <BuildDetails build={props.build} />;
-      }}
-    />
+      }
+    `,
+    { buildId },
   );
+
+  if (!response.build) {
+    return <NotFound />;
+  }
+
+  return (
+    <>
+      <AppBreadcrumbs build={response.build} viewer={response.viewer} />
+      <BuildDetails build={response.build} />
+    </>
+  );
+}
+
+export default function BuildById() {
+  let { buildId } = useParams();
+
+  if (!buildId) {
+    return <NotFound />;
+  }
+
+  return BuildByIdStrict(buildId);
 }

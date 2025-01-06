@@ -1,22 +1,41 @@
 import React from 'react';
+import { useFragment } from 'react-relay';
 
+import { graphql } from 'babel-plugin-relay/macro';
+
+import { Tooltip, useTheme } from '@mui/material';
 import Avatar from '@mui/material/Avatar';
 import Chip from '@mui/material/Chip';
 
-import { createFragmentContainer } from 'react-relay';
-import { graphql } from 'babel-plugin-relay/macro';
-import { WorkerStatusChip_worker } from './__generated__/WorkerStatusChip_worker.graphql';
-import { Tooltip, useTheme } from '@mui/material';
-import PlatformIcon from '../icons/PlatformIcon';
+import PlatformIcon from 'components/icons/PlatformIcon';
+
+import { WorkerStatusChip_worker$key } from './__generated__/WorkerStatusChip_worker.graphql';
 
 interface Props {
   className?: string;
-  worker: WorkerStatusChip_worker;
+  worker: WorkerStatusChip_worker$key;
 }
 
-let WorkerStatusChip = (props: Props) => {
+export default function WorkerStatusChip(props: Props) {
   let theme = useTheme();
-  const { worker } = props;
+  let worker = useFragment(
+    graphql`
+      fragment WorkerStatusChip_worker on PersistentWorker {
+        os
+        arch
+        info {
+          heartbeatTimestamp
+        }
+      }
+    `,
+    props.worker,
+  );
+
+  // Work around https://github.com/facebook/relay/issues/3514
+  if (worker == null) {
+    return <></>;
+  }
+
   let info = worker.info;
 
   let offline = true;
@@ -42,16 +61,4 @@ let WorkerStatusChip = (props: Props) => {
       />
     </Tooltip>
   );
-};
-
-export default createFragmentContainer(WorkerStatusChip, {
-  worker: graphql`
-    fragment WorkerStatusChip_worker on PersistentWorker {
-      os
-      arch
-      info {
-        heartbeatTimestamp
-      }
-    }
-  `,
-});
+}

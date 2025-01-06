@@ -1,63 +1,51 @@
-import Button from '@mui/material/Button';
-import { orange } from '@mui/material/colors';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
-import FormControl from '@mui/material/FormControl';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import Input from '@mui/material/Input';
-import InputLabel from '@mui/material/InputLabel';
-import { WithStyles } from '@mui/styles';
-import createStyles from '@mui/styles/createStyles';
-import withStyles from '@mui/styles/withStyles';
-import Switch from '@mui/material/Switch';
-import Typography from '@mui/material/Typography';
-import { graphql } from 'babel-plugin-relay/macro';
 import React, { useState } from 'react';
-import { commitMutation, createFragmentContainer } from 'react-relay';
-import environment from '../../createRelayEnvironment';
-import {
-  BillingSettingsDialogMutationResponse,
-  BillingSettingsDialogMutationVariables,
-} from './__generated__/BillingSettingsDialogMutation.graphql';
-import { BillingSettingsDialog_billingSettings } from './__generated__/BillingSettingsDialog_billingSettings.graphql';
-import { Link } from '@mui/material';
+import { useMutation, useFragment } from 'react-relay';
 
-const styles = theme =>
-  createStyles({
+import { graphql } from 'babel-plugin-relay/macro';
+
+import mui from 'mui';
+
+import {
+  BillingSettingsDialogMutation,
+  BillingSettingsDialogMutation$data,
+  BillingSettingsDialogMutation$variables,
+} from './__generated__/BillingSettingsDialogMutation.graphql';
+import { BillingSettingsDialog_billingSettings$key } from './__generated__/BillingSettingsDialog_billingSettings.graphql';
+
+const useStyles = mui.makeStyles(theme => {
+  return {
     limit: {
-      color: orange[700],
+      color: mui.colors.orange[700],
       '&:hover': {
-        color: orange[900],
+        color: mui.colors.orange[900],
       },
     },
-  });
+  };
+});
 
-const saveBillingSettingsMutation = graphql`
-  mutation BillingSettingsDialogMutation($input: BillingSettingsInput!) {
-    saveBillingSettings(input: $input) {
-      settings {
-        ownerUid
-        enabled
-        billingCreditsLimit
-        billingEmailAddress
-        invoiceTemplate
-      }
-    }
-  }
-`;
-
-interface Props extends WithStyles<typeof styles> {
-  billingSettings: BillingSettingsDialog_billingSettings;
+interface Props {
+  billingSettings: BillingSettingsDialog_billingSettings$key;
 
   onClose(...args: any[]): void;
 
   open: boolean;
 }
 
-function BillingSettingsDialog(props: Props) {
-  const { billingSettings, classes, ...other } = props;
+export default function BillingSettingsDialog(props: Props) {
+  let billingSettings = useFragment(
+    graphql`
+      fragment BillingSettingsDialog_billingSettings on BillingSettings {
+        platform
+        ownerUid
+        enabled
+        billingCreditsLimit
+        billingEmailAddress
+        invoiceTemplate
+      }
+    `,
+    props.billingSettings,
+  );
+  let classes = useStyles();
   let [enabled, setEnabled] = useState(billingSettings.enabled);
   let [billingEmailAddress, setBillingEmailAddress] = useState(billingSettings.billingEmailAddress);
   let [invoiceTemplate, setInvoiceTemplate] = useState(billingSettings.invoiceTemplate);
@@ -67,20 +55,38 @@ function BillingSettingsDialog(props: Props) {
     billingSettings.billingEmailAddress === billingEmailAddress &&
     billingSettings.invoiceTemplate === invoiceTemplate;
 
+  const [commitSaveBillingSettingsMutation] = useMutation<BillingSettingsDialogMutation>(graphql`
+    mutation BillingSettingsDialogMutation($input: BillingSettingsInput!) {
+      saveBillingSettings(input: $input) {
+        settings {
+          platform
+          ownerUid
+          enabled
+          billingCreditsLimit
+          billingEmailAddress
+          invoiceTemplate
+        }
+      }
+    }
+  `);
   function updateSettings() {
-    const variables: BillingSettingsDialogMutationVariables = {
+    const variables: BillingSettingsDialogMutation$variables = {
       input: {
-        clientMutationId: 'save-billing-settings-' + props.billingSettings.ownerUid,
-        ownerUid: props.billingSettings.ownerUid,
+        platform: billingSettings.platform,
+        clientMutationId: 'save-billing-settings-' + billingSettings.ownerUid,
+        ownerUid: billingSettings.ownerUid,
         enabled: enabled,
         billingEmailAddress: billingEmailAddress,
         invoiceTemplate: invoiceTemplate,
       },
     };
-    commitMutation(environment, {
-      mutation: saveBillingSettingsMutation,
+    commitSaveBillingSettingsMutation({
       variables: variables,
-      onCompleted: (response: BillingSettingsDialogMutationResponse) => {
+      onCompleted: (response: BillingSettingsDialogMutation$data, errors) => {
+        if (errors) {
+          console.log(errors);
+          return;
+        }
         setEnabled(response.saveBillingSettings.settings.enabled);
         setBillingEmailAddress(response.saveBillingSettings.settings.billingEmailAddress);
         setInvoiceTemplate(response.saveBillingSettings.settings.invoiceTemplate);
@@ -91,16 +97,16 @@ function BillingSettingsDialog(props: Props) {
   }
 
   return (
-    <Dialog {...other}>
-      <DialogTitle>Compute Credits Auto Pay</DialogTitle>
-      <DialogContent>
-        <FormControl fullWidth>
-          <FormControlLabel
-            control={<Switch checked={enabled} onChange={event => setEnabled(event.target.checked)} />}
+    <mui.Dialog onClose={props.onClose} open={props.open}>
+      <mui.DialogTitle>Compute Credits Auto Pay</mui.DialogTitle>
+      <mui.DialogContent>
+        <mui.FormControl fullWidth>
+          <mui.FormControlLabel
+            control={<mui.Switch checked={enabled} onChange={event => setEnabled(event.target.checked)} />}
             label="Auto Pay Enabled"
           />
-        </FormControl>
-        <Typography variant="subtitle1">
+        </mui.FormControl>
+        <mui.Typography variant="subtitle1">
           <p>
             By enabling Auto Pay your repositories will be able to use compute credits in advance. You'll be billed in
             the end of each month for the amount of compute credits that your repositories used that month.
@@ -108,50 +114,38 @@ function BillingSettingsDialog(props: Props) {
           <p>
             Your current limit is set to maximum <b className={classes.limit}>{billingSettings.billingCreditsLimit}</b>{' '}
             compute credits that your repositories can use each month. To increase the limit please{' '}
-            <Link color="inherit" href="mailto:support@cirruslabs.org">
+            <mui.Link color="inherit" href="mailto:support@cirruslabs.org">
               email support
-            </Link>
+            </mui.Link>
             .
           </p>
-        </Typography>
-        <FormControl fullWidth>
-          <InputLabel htmlFor="billingEmailAddress">Billing email address</InputLabel>
-          <Input
+        </mui.Typography>
+        <mui.FormControl fullWidth>
+          <mui.InputLabel htmlFor="billingEmailAddress">Billing email address</mui.InputLabel>
+          <mui.Input
             id="billingEmailAddress"
             value={billingEmailAddress}
             error={enabled && billingEmailAddress === ''}
             onChange={event => setBillingEmailAddress(event.target.value)}
           />
-        </FormControl>
-        <FormControl fullWidth>
-          <InputLabel htmlFor="invoiceTemplate">Invoice Template e.g. P.O Number</InputLabel>
-          <Input
+        </mui.FormControl>
+        <mui.FormControl fullWidth>
+          <mui.InputLabel htmlFor="invoiceTemplate">Invoice Template e.g. P.O Number</mui.InputLabel>
+          <mui.Input
             id="invoiceTemplate"
             value={invoiceTemplate}
             onChange={event => setInvoiceTemplate(event.target.value)}
           />
-        </FormControl>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={updateSettings} disabled={notChanged} variant="contained">
+        </mui.FormControl>
+      </mui.DialogContent>
+      <mui.DialogActions>
+        <mui.Button onClick={updateSettings} disabled={notChanged} variant="contained">
           Update
-        </Button>
-        <Button onClick={props.onClose} color="secondary" variant="contained">
+        </mui.Button>
+        <mui.Button onClick={props.onClose} color="secondary" variant="contained">
           Close
-        </Button>
-      </DialogActions>
-    </Dialog>
+        </mui.Button>
+      </mui.DialogActions>
+    </mui.Dialog>
   );
 }
-
-export default createFragmentContainer(withStyles(styles)(BillingSettingsDialog), {
-  billingSettings: graphql`
-    fragment BillingSettingsDialog_billingSettings on BillingSettings {
-      ownerUid
-      enabled
-      billingCreditsLimit
-      billingEmailAddress
-      invoiceTemplate
-    }
-  `,
-});

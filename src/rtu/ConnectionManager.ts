@@ -1,6 +1,8 @@
-import ReconnectingWebSocket from '../vendor/reconnecting-websocket/reconnecting-websocket';
+import ReconnectingWebSocket from 'vendor/reconnecting-websocket/reconnecting-websocket';
+
 import { HandlersManager } from './HandlersManager';
 
+// @ts-ignore
 const ws = new ReconnectingWebSocket('wss://api.cirrus-ci.com/ws', null, null);
 
 const handlersManager = new HandlersManager();
@@ -17,7 +19,7 @@ ws.onopen = () => {
   if (process.env.NODE_ENV === 'development') {
     console.log('Subscribing to ' + allTopicSubscribeRequests.length + ' topics!');
   }
-  // send reconnent events so handlers can refresh
+  // send reconnect events so handlers can refresh
   handlersManager.allTopics().forEach(topic => handlersManager.handleNewUpdate(topic, { type: 'reconnect' }));
 };
 

@@ -1,39 +1,68 @@
 import React from 'react';
-import { createFragmentContainer } from 'react-relay';
+import { useFragment } from 'react-relay';
+
 import { graphql } from 'babel-plugin-relay/macro';
-import Paper from '@mui/material/Paper';
-import { WithStyles } from '@mui/styles';
-import createStyles from '@mui/styles/createStyles';
-import withStyles from '@mui/styles/withStyles';
-import Typography from '@mui/material/Typography';
-import Toolbar from '@mui/material/Toolbar';
-import OwnerComputeCredits from '../compute-credits/OwnerComputeCredits';
-import WebHookSettings from '../webhooks/WebHookSettings';
-import OwnerApiSettings from './OwnerApiSettings';
-import OwnerSecuredVariables from './OwnerSecuredVariables';
-import OwnerPersistentWorkerPools from './OwnerPersistentWorkerPools';
-import { OwnerSettings_info } from './__generated__/OwnerSettings_info.graphql';
-import MarkdownTypography from '../common/MarkdownTypography';
-import CardHeader from '@mui/material/CardHeader';
+
 import { Card, CardActions, CardContent } from '@mui/material';
 import Button from '@mui/material/Button';
+import CardHeader from '@mui/material/CardHeader';
+import Paper from '@mui/material/Paper';
+import Toolbar from '@mui/material/Toolbar';
+import Typography from '@mui/material/Typography';
+import { makeStyles } from '@mui/styles';
 
-const styles = theme =>
-  createStyles({
+import MarkdownTypography from 'components/common/MarkdownTypography';
+import OwnerComputeCredits from 'components/compute-credits/OwnerComputeCredits';
+import WebHookSettings from 'components/webhooks/WebHookSettings';
+
+import MonthlyUsageChart from '../compute-credits/MonthlyUsageChart';
+import OwnerApiSettings from './OwnerApiSettings';
+import OwnerPersistentWorkerPools from './OwnerPersistentWorkerPools';
+import OwnerSecuredVariables from './OwnerSecuredVariables';
+import { OwnerSettings_info$key } from './__generated__/OwnerSettings_info.graphql';
+
+const useStyles = makeStyles(theme => {
+  return {
     title: {
       backgroundColor: theme.palette.action.disabledBackground,
     },
     settingGap: {
       paddingTop: 16,
     },
-  });
+  };
+});
 
-interface Props extends WithStyles<typeof styles> {
-  info: OwnerSettings_info;
+interface Props {
+  info: OwnerSettings_info$key | null;
 }
 
-function OwnerSettings(props: Props) {
-  let { info, classes } = props;
+export default function OwnerSettings(props: Props) {
+  let info = useFragment(
+    graphql`
+      fragment OwnerSettings_info on OwnerInfo {
+        platform
+        uid
+        name
+        viewerPermission
+        description {
+          message
+          actions {
+            title
+            link
+          }
+        }
+        ...OwnerComputeCredits_info
+        ...MonthlyUsageChart_info
+        ...OwnerApiSettings_info
+        ...OwnerSecuredVariables_info
+        ...OwnerPersistentWorkerPools_info
+        ...WebHookSettings_info
+      }
+    `,
+    props.info,
+  );
+
+  let classes = useStyles();
 
   if (!info) {
     return <Typography variant="subtitle1">Can't find information this organization!</Typography>;
@@ -72,6 +101,10 @@ function OwnerSettings(props: Props) {
       </Paper>
       <div className={classes.settingGap} />
       <Paper elevation={16}>
+        <MonthlyUsageChart info={info} />
+      </Paper>
+      <div className={classes.settingGap} />
+      <Paper elevation={16}>
         <OwnerSecuredVariables info={info} />
       </Paper>
       <div className={classes.settingGap} />
@@ -90,26 +123,3 @@ function OwnerSettings(props: Props) {
     </div>
   );
 }
-
-export default createFragmentContainer(withStyles(styles)(OwnerSettings), {
-  info: graphql`
-    fragment OwnerSettings_info on OwnerInfo {
-      platform
-      uid
-      name
-      viewerPermission
-      description {
-        message
-        actions {
-          title
-          link
-        }
-      }
-      ...OwnerComputeCredits_info
-      ...OwnerApiSettings_info
-      ...OwnerSecuredVariables_info
-      ...OwnerPersistentWorkerPools_info
-      ...WebHookSettings_info
-    }
-  `,
-});

@@ -1,33 +1,60 @@
 import React from 'react';
-
-import { QueryRenderer } from 'react-relay';
-import { graphql } from 'babel-plugin-relay/macro';
-
-import environment from '../../createRelayEnvironment';
-import CirrusLinearProgress from '../../components/common/CirrusLinearProgress';
-import OwnerSettings from '../../components/settings/OwnerSettings';
-import { OwnerSettingsRendererQuery } from './__generated__/OwnerSettingsRendererQuery.graphql';
+import { useLazyLoadQuery } from 'react-relay';
 import { useParams } from 'react-router-dom';
 
-export default function OwnerSettingsRenderer(): JSX.Element {
-  let { platform, name } = useParams();
-  return (
-    <QueryRenderer<OwnerSettingsRendererQuery>
-      environment={environment}
-      variables={{ platform, name }}
-      query={graphql`
-        query OwnerSettingsRendererQuery($platform: String!, $name: String!) {
-          ownerInfoByName(platform: $platform, name: $name) {
-            ...OwnerSettings_info
-          }
+import { graphql } from 'babel-plugin-relay/macro';
+
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
+
+import AppBreadcrumbs from 'components/common/AppBreadcrumbs';
+import OwnerSettings from 'components/settings/OwnerSettings';
+import NotFound from 'scenes/NotFound';
+
+import { OwnerSettingsRendererQuery } from './__generated__/OwnerSettingsRendererQuery.graphql';
+
+function OwnerSettingsRendererFor(platform: string, name: string) {
+  const response = useLazyLoadQuery<OwnerSettingsRendererQuery>(
+    graphql`
+      query OwnerSettingsRendererQuery($platform: String!, $name: String!) {
+        ownerInfoByName(platform: $platform, name: $name) {
+          ...OwnerSettings_info
+          ...AppBreadcrumbs_info
         }
-      `}
-      render={({ error, props }) => {
-        if (!props) {
-          return <CirrusLinearProgress />;
+        viewer {
+          ...AppBreadcrumbs_viewer
         }
-        return <OwnerSettings info={props.ownerInfoByName} />;
-      }}
-    />
+      }
+    `,
+    { platform, name },
   );
+
+  if (!response.ownerInfoByName) {
+    return <NotFound />;
+  }
+
+  return (
+    <>
+      <AppBreadcrumbs
+        info={response.ownerInfoByName}
+        viewer={response.viewer}
+        extraCrumbs={[
+          {
+            name: 'Account Settings',
+            Icon: ManageAccountsIcon,
+          },
+        ]}
+      />
+      <OwnerSettings info={response.ownerInfoByName} />
+    </>
+  );
+}
+
+export default function OwnerSettingsRenderer() {
+  let { platform, name } = useParams();
+
+  if (!platform || !name) {
+    return <NotFound />;
+  }
+
+  return OwnerSettingsRendererFor(platform, name);
 }

@@ -1,33 +1,68 @@
-import { createFragmentContainer } from 'react-relay';
-import { graphql } from 'babel-plugin-relay/macro';
 import React from 'react';
-import { WithStyles } from '@mui/styles';
-import withStyles from '@mui/styles/withStyles';
+import { useFragment } from 'react-relay';
+
+import { graphql } from 'babel-plugin-relay/macro';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useRecoilState } from 'recoil';
+
+import { Box, useTheme } from '@mui/material';
 import Chip from '@mui/material/Chip';
 import Typography from '@mui/material/Typography';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
-import { TaskExecutionInfo_task } from './__generated__/TaskExecutionInfo_task.graphql';
-import { formatDuration } from '../../utils/time';
-import { Box, useTheme } from '@mui/material';
-import { useRecoilState } from 'recoil';
-import { prefersDarkModeState } from '../../cirrusTheme';
+import { makeStyles } from '@mui/styles';
 
-let styles = {
-  chip: {
-    marginTop: 4,
-    marginBottom: 4,
-    marginRight: 4,
-  },
-};
+import { prefersDarkModeState } from 'cirrusTheme';
 
-interface Props extends WithStyles<typeof styles> {
-  task: TaskExecutionInfo_task;
+import { formatDuration } from 'utils/time';
+
+import { TaskExecutionInfo_task$key } from './__generated__/TaskExecutionInfo_task.graphql';
+
+const useStyles = makeStyles(theme => {
+  return {
+    chip: {
+      marginTop: 4,
+      marginBottom: 4,
+      marginRight: 4,
+    },
+  };
+});
+
+interface Props {
+  task: TaskExecutionInfo_task$key;
 }
 
-function TaskExecutionInfo(props: Props) {
+export default function TaskExecutionInfo(props: Props) {
+  let task = useFragment(
+    graphql`
+      fragment TaskExecutionInfo_task on Task {
+        instanceResources {
+          cpu
+          memory
+        }
+        executionInfo {
+          labels
+          cpuChart {
+            maxValue
+            points {
+              value
+              secondsFromStart
+            }
+          }
+          memoryChart {
+            maxValue
+            points {
+              value
+              secondsFromStart
+            }
+          }
+        }
+      }
+    `,
+    props.task,
+  );
+
   let theme = useTheme();
   const [prefersDarkMode] = useRecoilState(prefersDarkModeState);
-  let { task, classes } = props;
+  let classes = useStyles();
 
   if (!task.executionInfo) return null;
 
@@ -42,7 +77,7 @@ function TaskExecutionInfo(props: Props) {
       chartPoints[index] = {
         'Requested CPUs': requestedCPU,
         'Used CPUs': point.value.toFixed(2),
-        TimestampLabel: formatDuration(point.secondsFromStart),
+        'Seconds from start': point.secondsFromStart,
       };
     });
     return (
@@ -50,10 +85,11 @@ function TaskExecutionInfo(props: Props) {
         <Typography variant="h6" align="center">
           CPU Usage
         </Typography>
-        <ResponsiveContainer height={200} width="100%">
+        <ResponsiveContainer debounce={300} height={200} width="100%">
           <AreaChart data={chartPoints}>
+            <XAxis type="number" domain={[0, 'dataMax']} dataKey="Seconds from start" hide />
             <YAxis type="number" domain={[0, requestedCPU]} hide />
-            <CartesianGrid stroke={null} fill={prefersDarkMode ? theme.palette.info.dark : theme.palette.info.light} />
+            <CartesianGrid stroke={''} fill={prefersDarkMode ? theme.palette.info.dark : theme.palette.info.light} />
             <Area
               type="monotone"
               dataKey="Used CPUs"
@@ -61,7 +97,7 @@ function TaskExecutionInfo(props: Props) {
               fill={prefersDarkMode ? theme.palette.success.main : theme.palette.success.light}
             />
             <Tooltip
-              labelFormatter={index => `Time: ${chartPoints[index].TimestampLabel}`}
+              labelFormatter={value => `Time: ${formatDuration(value)}`}
               contentStyle={{ backgroundColor: theme.palette.background.paper }}
             />
           </AreaChart>
@@ -83,13 +119,13 @@ function TaskExecutionInfo(props: Props) {
         chartPoints[index] = {
           'Requested Memory': (requestedMemory / 1024.0).toFixed(2),
           'Used Memory': Math.min(point.value / 1024.0, requestedMemory / 1024.0).toFixed(2),
-          TimestampLabel: formatDuration(point.secondsFromStart),
+          'Seconds from start': point.secondsFromStart,
         };
       } else {
         chartPoints[index] = {
           'Requested Memory': requestedMemory,
           'Used Memory': Math.min(point.value, requestedMemory),
-          TimestampLabel: formatDuration(point.secondsFromStart),
+          'Seconds from start': point.secondsFromStart,
         };
       }
     });
@@ -98,10 +134,11 @@ function TaskExecutionInfo(props: Props) {
         <Typography variant="h6" align="center">
           Memory Usage ({memoryUnit})
         </Typography>
-        <ResponsiveContainer height={200} width="100%">
+        <ResponsiveContainer debounce={300} height={200} width="100%">
           <AreaChart data={chartPoints}>
+            <XAxis type="number" domain={[0, 'dataMax']} dataKey="Seconds from start" hide />
             <YAxis type="number" domain={[0, memoryUnit === 'Gb' ? requestedMemory / 1024 : requestedMemory]} hide />
-            <CartesianGrid stroke={null} fill={prefersDarkMode ? theme.palette.info.dark : theme.palette.info.light} />
+            <CartesianGrid stroke={''} fill={prefersDarkMode ? theme.palette.info.dark : theme.palette.info.light} />
             <Area
               type="monotone"
               dataKey="Used Memory"
@@ -109,7 +146,7 @@ function TaskExecutionInfo(props: Props) {
               fill={prefersDarkMode ? theme.palette.success.main : theme.palette.success.light}
             />
             <Tooltip
-              labelFormatter={index => `Time: ${chartPoints[index].TimestampLabel}`}
+              labelFormatter={value => `Time: ${formatDuration(value)}`}
               contentStyle={{ backgroundColor: theme.palette.background.paper }}
             />
           </AreaChart>
@@ -130,31 +167,3 @@ function TaskExecutionInfo(props: Props) {
     </div>
   );
 }
-
-export default createFragmentContainer(withStyles(styles)(TaskExecutionInfo), {
-  task: graphql`
-    fragment TaskExecutionInfo_task on Task {
-      instanceResources {
-        cpu
-        memory
-      }
-      executionInfo {
-        labels
-        cpuChart {
-          maxValue
-          points {
-            value
-            secondsFromStart
-          }
-        }
-        memoryChart {
-          maxValue
-          points {
-            value
-            secondsFromStart
-          }
-        }
-      }
-    }
-  `,
-});

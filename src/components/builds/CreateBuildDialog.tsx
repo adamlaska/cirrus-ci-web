@@ -1,48 +1,58 @@
 import React, { useState } from 'react';
-import environment from '../../createRelayEnvironment';
-import { commitMutation, createFragmentContainer } from 'react-relay';
-import { graphql } from 'babel-plugin-relay/macro';
-import Button from '@mui/material/Button';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogContentText from '@mui/material/DialogContentText';
-import DialogTitle from '@mui/material/DialogTitle';
-import TextField from '@mui/material/TextField';
 import AceEditor from 'react-ace';
+import { useFragment, useMutation } from 'react-relay';
 import { useNavigate } from 'react-router-dom';
-import { navigateBuildHelper } from '../../utils/navigateHelper';
 
 import 'ace-builds/src-noconflict/mode-yaml';
 import 'ace-builds/src-noconflict/theme-github';
-import { CreateBuildDialog_repository } from './__generated__/CreateBuildDialog_repository.graphql';
-import {
-  CreateBuildDialogMutationResponse,
-  CreateBuildDialogMutationVariables,
-} from './__generated__/CreateBuildDialogMutation.graphql';
+import { graphql } from 'babel-plugin-relay/macro';
 
-const createBuildMutation = graphql`
-  mutation CreateBuildDialogMutation($input: RepositoryCreateBuildInput!) {
-    createBuild(input: $input) {
-      build {
-        id
-      }
-    }
-  }
-`;
+import mui from 'mui';
+
+import { navigateBuildHelper } from 'utils/navigateHelper';
+
+import {
+  CreateBuildDialogMutation,
+  CreateBuildDialogMutation$data,
+  CreateBuildDialogMutation$variables,
+} from './__generated__/CreateBuildDialogMutation.graphql';
+import { CreateBuildDialog_repository$key } from './__generated__/CreateBuildDialog_repository.graphql';
 
 interface Props {
   onClose: Function;
   open: boolean;
-  repository: CreateBuildDialog_repository;
+  repository: CreateBuildDialog_repository$key;
 }
 
-function CreateBuildDialog(props: Props) {
+export default function CreateBuildDialog(props: Props) {
+  let repository = useFragment(
+    graphql`
+      fragment CreateBuildDialog_repository on Repository {
+        id
+        owner
+        name
+        masterBranch
+      }
+    `,
+    props.repository,
+  );
+
+  const [commitCreateBuildMutation] = useMutation<CreateBuildDialogMutation>(
+    graphql`
+      mutation CreateBuildDialogMutation($input: RepositoryCreateBuildInput!) {
+        createBuild(input: $input) {
+          build {
+            id
+          }
+        }
+      }
+    `,
+  );
+
   let navigate = useNavigate();
-  let [branch, setBranch] = useState(props.repository.masterBranch);
+  let [branch, setBranch] = useState(repository.masterBranch);
   let [configOverride, setConfigOverride] = useState('');
   let [sha, setSHA] = useState('');
-  let { repository } = props;
 
   function handleClose() {
     if (props.onClose) {
@@ -51,21 +61,23 @@ function CreateBuildDialog(props: Props) {
   }
 
   function sendMutation() {
-    const variables: CreateBuildDialogMutationVariables = {
+    const variables: CreateBuildDialogMutation$variables = {
       input: {
-        clientMutationId: props.repository.name,
-        repositoryId: props.repository.id,
+        clientMutationId: repository.name,
+        repositoryId: repository.id,
         branch: branch,
         sha: sha,
         configOverride: configOverride,
       },
     };
 
-    commitMutation(environment, {
-      mutation: createBuildMutation,
+    commitCreateBuildMutation({
       variables: variables,
-      onCompleted: (response: CreateBuildDialogMutationResponse) => {
-        console.log(response);
+      onCompleted: (response: CreateBuildDialogMutation$data, errors) => {
+        if (errors) {
+          console.log(errors);
+          return;
+        }
         navigateBuildHelper(navigate, null, response.createBuild.build.id);
       },
       onError: err => console.error(err),
@@ -73,13 +85,13 @@ function CreateBuildDialog(props: Props) {
   }
 
   return (
-    <Dialog open={props.open} onClose={handleClose} aria-labelledby="form-dialog-title">
-      <DialogTitle id="form-dialog-title">
+    <mui.Dialog open={props.open} onClose={handleClose} aria-labelledby="form-dialog-title">
+      <mui.DialogTitle id="form-dialog-title">
         Create new build for {repository.owner}/{repository.name}
-      </DialogTitle>
-      <DialogContent>
-        <DialogContentText>Customize parameters for build. (Optional)</DialogContentText>
-        <TextField
+      </mui.DialogTitle>
+      <mui.DialogContent>
+        <mui.DialogContentText>Customize parameters for build. (Optional)</mui.DialogContentText>
+        <mui.TextField
           margin="dense"
           id="branch"
           onChange={event => setBranch(event.target.value)}
@@ -87,7 +99,7 @@ function CreateBuildDialog(props: Props) {
           label="Branch"
           fullWidth
         />
-        <TextField
+        <mui.TextField
           margin="dense"
           id="sha"
           onChange={event => setSHA(event.target.value)}
@@ -95,7 +107,7 @@ function CreateBuildDialog(props: Props) {
           label="Optional SHA"
           fullWidth
         />
-        <DialogContentText>Optionally, you can override build configuration:</DialogContentText>
+        <mui.DialogContentText>Optionally, you can override build configuration:</mui.DialogContentText>
         <AceEditor
           mode="yaml"
           theme="github"
@@ -106,23 +118,13 @@ function CreateBuildDialog(props: Props) {
           editorProps={{ $blockScrolling: true }}
           highlightActiveLine={true}
           showGutter={true}
+          setOptions={{ useWorker: false }}
         />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose}>Cancel</Button>
-        <Button onClick={sendMutation}>Create</Button>
-      </DialogActions>
-    </Dialog>
+      </mui.DialogContent>
+      <mui.DialogActions>
+        <mui.Button onClick={handleClose}>Cancel</mui.Button>
+        <mui.Button onClick={sendMutation}>Create</mui.Button>
+      </mui.DialogActions>
+    </mui.Dialog>
   );
 }
-
-export default createFragmentContainer(CreateBuildDialog, {
-  repository: graphql`
-    fragment CreateBuildDialog_repository on Repository {
-      id
-      owner
-      name
-      masterBranch
-    }
-  `,
-});

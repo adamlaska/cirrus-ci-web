@@ -1,46 +1,70 @@
 import React, { useEffect, useState } from 'react';
-import Logs from '../logs/Logs';
-import { QueryRenderer } from 'react-relay';
+import { useLazyLoadQuery, useFragment } from 'react-relay';
+
 import { graphql } from 'babel-plugin-relay/macro';
-import environment from '../../createRelayEnvironment';
-import CirrusLinearProgress from '../common/CirrusLinearProgress';
-import { subscribeTaskCommandLogs } from '../../rtu/ConnectionManager';
-import CirrusCircularProgress from '../common/CirrusCircularProgress';
-import { isTaskCommandFinalStatus } from '../../utils/status';
-import Tooltip from '@mui/material/Tooltip';
-import { WithStyles } from '@mui/styles';
-import createStyles from '@mui/styles/createStyles';
-import withStyles from '@mui/styles/withStyles';
-import GetApp from '@mui/icons-material/GetApp';
-import Fab from '@mui/material/Fab';
+
+import mui from 'mui';
+
+import CirrusLinearProgress from 'components/common/CirrusLinearProgress';
+import Logs from 'components/logs/Logs';
+import { subscribeTaskCommandLogs } from 'rtu/ConnectionManager';
+import { isTaskCommandFinalStatus } from 'utils/status';
+
+import { TaskCommandStatus, TaskCommandType } from './__generated__/TaskCommandList_task.graphql';
 import { TaskCommandLogsTailQuery } from './__generated__/TaskCommandLogsTailQuery.graphql';
-import { TaskCommandStatus } from './__generated__/TaskCommandList_task.graphql';
+import { TaskCommandLogs_executionInfo$key } from './__generated__/TaskCommandLogs_executionInfo.graphql';
 
 function logURL(taskId: string, command) {
   return 'https://api.cirrus-ci.com/v1/task/' + taskId + '/logs/' + command.name + '.log';
 }
 
-let styles = theme =>
-  createStyles({
+function cacheURL(taskId: string, cacheHit) {
+  return 'https://api.cirrus-ci.com/v1/task/' + taskId + '/caches/' + cacheHit.key + '.tar.gz';
+}
+
+const useStyles = mui.makeStyles(theme => {
+  return {
     actionButtons: {
       position: 'absolute',
       right: 0,
+      paddingTop: theme.spacing(1.5),
+      paddingRight: theme.spacing(1.5),
     },
     downloadButton: {
-      margin: theme.spacing(1.0),
+      marginRight: theme.spacing(1.5),
     },
-  });
+    openButton: {
+      fontSize: 20,
+    },
+  };
+});
 
-interface RealTimeLogsProps extends WithStyles<typeof styles> {
+interface RealTimeLogsProps {
   taskId: string;
   command: {
     name: string;
     status: TaskCommandStatus;
+    type: TaskCommandType;
   };
   initialLogLines: ReadonlyArray<string>;
+  executionInfo: TaskCommandLogs_executionInfo$key;
+  stripTimestamps?: boolean;
 }
 
 function TaskCommandRealTimeLogs(props: RealTimeLogsProps) {
+  const executionInfo = useFragment(
+    graphql`
+      fragment TaskCommandLogs_executionInfo on ExecutionInfo {
+        cacheRetrievalAttempts {
+          hits {
+            key
+          }
+        }
+      }
+    `,
+    props.executionInfo,
+  );
+
   let realTimeLogs = !isTaskCommandFinalStatus(props.command.status);
   let [additionalLogs, setAdditionalLogs] = useState('\n');
 
@@ -55,64 +79,90 @@ function TaskCommandRealTimeLogs(props: RealTimeLogsProps) {
     return () => closable();
   }, [realTimeLogs, props.taskId, props.command.name, additionalLogs]);
 
-  let { classes, taskId, command, initialLogLines } = props;
+  let { taskId, command, initialLogLines } = props;
+  let classes = useStyles();
+
   let inProgress = !isTaskCommandFinalStatus(command.status);
+
+  let cacheHit;
+  if (command.type === 'CACHE' && executionInfo) {
+    cacheHit = executionInfo.cacheRetrievalAttempts.hits.find(hit => hit.key.startsWith(`${command.name}-`));
+  }
+
   let downloadButton = (
     <div className={classes.actionButtons}>
-      <Fab
-        variant="circular"
-        className={classes.downloadButton}
-        href={logURL(taskId, command)}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        <Tooltip title="Download Full Logs">
-          <GetApp />
-        </Tooltip>
-      </Fab>
+      {cacheHit && (
+        <mui.Tooltip title="Download Cache" disableInteractive>
+          <mui.Fab
+            variant="circular"
+            className={classes.downloadButton}
+            href={cacheURL(taskId, cacheHit)}
+            rel="noopener noreferrer"
+            size="small"
+          >
+            <mui.icons.ArchiveOutlined />
+          </mui.Fab>
+        </mui.Tooltip>
+      )}
+      <mui.Tooltip title="Open Full Logs" disableInteractive>
+        <mui.Fab
+          variant="circular"
+          className={classes.openButton}
+          href={logURL(taskId, command)}
+          target="_blank"
+          rel="noopener noreferrer"
+          size="small"
+        >
+          <mui.icons.OpenInNewOutlined fontSize="inherit" />
+        </mui.Fab>
+      </mui.Tooltip>
     </div>
   );
   return (
     <div style={{ width: '100%', height: '100%' }}>
       {inProgress ? null : downloadButton}
-      <Logs logsName={command.name} logs={initialLogLines.join('\n') + additionalLogs} />
+      <Logs
+        logsName={command.name}
+        logs={initialLogLines.join('\n') + additionalLogs}
+        stripTimestamps={props.stripTimestamps}
+      />
       {inProgress ? <CirrusLinearProgress /> : null}
     </div>
   );
 }
 
-interface TaskCommandLogsProps extends WithStyles<typeof styles> {
+interface TaskCommandLogsProps {
   taskId: string;
   command: {
     name: string;
     status: TaskCommandStatus;
+    type: TaskCommandType;
   };
+  stripTimestamps?: boolean;
 }
 
-function TaskCommandLogs(props: TaskCommandLogsProps) {
-  return (
-    <QueryRenderer<TaskCommandLogsTailQuery>
-      environment={environment}
-      variables={{ taskId: props.taskId, commandName: props.command.name }}
-      query={graphql`
-        query TaskCommandLogsTailQuery($taskId: ID!, $commandName: String!) {
-          task(id: $taskId) {
-            commandLogsTail(name: $commandName)
+export default function TaskCommandLogs(props: TaskCommandLogsProps) {
+  const response = useLazyLoadQuery<TaskCommandLogsTailQuery>(
+    graphql`
+      query TaskCommandLogsTailQuery($taskId: ID!, $commandName: String!) {
+        task(id: $taskId) {
+          commandLogsTail(name: $commandName)
+          executionInfo {
+            ...TaskCommandLogs_executionInfo
           }
         }
-      `}
-      render={response => {
-        if (!response.props) {
-          return (
-            <div style={{ width: '100%', minHeight: 100, justifyContent: 'center' }}>
-              <CirrusCircularProgress />
-            </div>
-          );
-        }
-        return <TaskCommandRealTimeLogs initialLogLines={response.props.task.commandLogsTail || []} {...props} />;
-      }}
+      }
+    `,
+    { taskId: props.taskId, commandName: props.command.name },
+  );
+
+  if (!response.task) return null;
+
+  return (
+    <TaskCommandRealTimeLogs
+      initialLogLines={response.task.commandLogsTail || []}
+      executionInfo={response.task.executionInfo}
+      {...props}
     />
   );
 }
-
-export default withStyles(styles)(TaskCommandLogs);

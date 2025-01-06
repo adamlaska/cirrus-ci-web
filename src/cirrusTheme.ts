@@ -1,13 +1,22 @@
-import { ThemeOptions } from '@mui/material/styles';
 import { atom, selector } from 'recoil';
-import { localStorageEffect } from './utils/recoil';
 
 import { grey, lightGreen, orange, red } from '@mui/material/colors';
+import { ThemeOptions } from '@mui/material/styles';
+
+import { localStorageEffect } from 'utils/recoil';
 
 export const prefersDarkModeState = atom({
   key: 'CurrentlyPrefersDarkMode',
   default: false,
   effects_UNSTABLE: [localStorageEffect('CurrentlyPreferredTheme')],
+});
+
+export const muiThemeOptions = selector({
+  key: 'muiThemeOptions',
+  get: ({ get }) => {
+    const prefersDarkMode = get(prefersDarkModeState);
+    return prefersDarkMode ? muiDarkTheme : muiLightTheme;
+  },
 });
 
 export const cirrusColorsState = selector({
@@ -83,6 +92,13 @@ export let cirrusLightTheme: ThemeOptions = {
         },
       },
     },
+    MuiSkeleton: {
+      styleOverrides: {
+        root: {
+          backgroundColor: grey['800'],
+        },
+      },
+    },
     MuiTableCell: {
       styleOverrides: {
         body: {
@@ -154,3 +170,17 @@ export let cirrusDarkTheme: ThemeOptions = {
     },
   },
 };
+
+export let muiLightTheme: ThemeOptions = {
+  palette: cirrusLightTheme.palette,
+};
+
+export let muiDarkTheme: ThemeOptions = {
+  palette: cirrusDarkTheme.palette,
+};
+
+export const cirrusOpenDrawerState = atom({
+  key: 'CirrusOpenDrawer',
+  default: false,
+  effects_UNSTABLE: [localStorageEffect('CirrusOpenDrawer')],
+});

@@ -1,18 +1,34 @@
 import React from 'react';
-import { CardContent } from '@mui/material';
-import { createFragmentContainer } from 'react-relay';
+import { useFragment } from 'react-relay';
+
 import { graphql } from 'babel-plugin-relay/macro';
-import Typography from '@mui/material/Typography';
-import Card from '@mui/material/Card';
-import { BuildDebuggingInformation_build } from './__generated__/BuildDebuggingInformation_build.graphql';
-import InlineLogs from '../logs/InlineLogs';
+
+import mui from 'mui';
+
+import InlineLogs from 'components/logs/InlineLogs';
+
+import { BuildDebuggingInformation_build$key } from './__generated__/BuildDebuggingInformation_build.graphql';
 
 interface Props {
-  build: BuildDebuggingInformation_build;
+  build: BuildDebuggingInformation_build$key;
 }
 
-function BuildDebuggingInformation(props: Props) {
-  let { build } = props;
+export default function BuildDebuggingInformation(props: Props) {
+  let build = useFragment(
+    graphql`
+      fragment BuildDebuggingInformation_build on Build {
+        parsingResult {
+          rawYamlConfig
+          rawStarlarkConfig
+          processedYamlConfig
+          outputLogs
+          environment
+          affectedFiles
+        }
+      }
+    `,
+    props.build,
+  );
 
   if (!build.parsingResult) {
     return null;
@@ -28,29 +44,14 @@ function BuildDebuggingInformation(props: Props) {
     );
 
   return (
-    <Card elevation={24}>
-      <CardContent>
-        <Typography variant="h6">Debugging Information</Typography>
+    <mui.Card elevation={24}>
+      <mui.CardContent>
+        <mui.Typography variant="h6">Debugging Information</mui.Typography>
         <InlineLogs title="YAML configuration" lines={build.parsingResult.rawYamlConfig.split('\n')} />
         <InlineLogs title="Environment Variables" lines={build.parsingResult.environment} />
         <InlineLogs title="Affected Files" lines={build.parsingResult.affectedFiles} />
         {starlarkInformation}
-      </CardContent>
-    </Card>
+      </mui.CardContent>
+    </mui.Card>
   );
 }
-
-export default createFragmentContainer(BuildDebuggingInformation, {
-  build: graphql`
-    fragment BuildDebuggingInformation_build on Build {
-      parsingResult {
-        rawYamlConfig
-        rawStarlarkConfig
-        processedYamlConfig
-        outputLogs
-        environment
-        affectedFiles
-      }
-    }
-  `,
-});

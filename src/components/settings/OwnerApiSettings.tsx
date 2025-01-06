@@ -1,72 +1,93 @@
 import React, { useState } from 'react';
-import { commitMutation, createFragmentContainer } from 'react-relay';
+import { useMutation, useFragment } from 'react-relay';
+
 import { graphql } from 'babel-plugin-relay/macro';
-import { OwnerApiSettings_info } from './__generated__/OwnerApiSettings_info.graphql';
-import {
-  GenerateNewOwnerAccessTokenInput,
-  OwnerApiSettingsMutationResponse,
-} from './__generated__/OwnerApiSettingsMutation.graphql';
-import createStyles from '@mui/styles/createStyles';
-import environment from '../../createRelayEnvironment';
-import Typography from '@mui/material/Typography';
-import TextField from '@mui/material/TextField';
-import CardActions from '@mui/material/CardActions';
+
+import { Link } from '@mui/material';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
-import CardHeader from '@mui/material/CardHeader';
+import CardActions from '@mui/material/CardActions';
 import CardContent from '@mui/material/CardContent';
-import { Link } from '@mui/material';
-import { withStyles, WithStyles } from '@mui/styles';
+import CardHeader from '@mui/material/CardHeader';
+import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
+import { makeStyles } from '@mui/styles';
 
-const generateNewTokenMutation = graphql`
-  mutation OwnerApiSettingsMutation($input: GenerateNewOwnerAccessTokenInput!) {
-    generateNewOwnerAccessToken(input: $input) {
-      token
-    }
-  }
-`;
+import OwnerScopedTokenDialog from './OwnerScopedTokenDialog';
+import {
+  OwnerApiSettingsMutation,
+  GenerateNewOwnerAccessTokenInput,
+  OwnerApiSettingsMutation$data,
+} from './__generated__/OwnerApiSettingsMutation.graphql';
+import { OwnerApiSettings_info$key } from './__generated__/OwnerApiSettings_info.graphql';
 
-const styles = theme =>
-  createStyles({
+const useStyles = makeStyles(theme => {
+  return {
     textField: {
       width: '100%',
       marginLeft: theme.spacing(1.0),
       marginRight: theme.spacing(1.0),
     },
-  });
+  };
+});
 
-interface Props extends WithStyles<typeof styles> {
-  info: OwnerApiSettings_info;
+interface Props {
+  info: OwnerApiSettings_info$key;
 }
 
-function OwnerApiSettings(props: Props) {
-  let { classes } = props;
-  let existingTokenComponent = null;
-  let [newToken, setNewToken] = useState(null);
+export default function OwnerApiSettings(props: Props) {
+  let info = useFragment(
+    graphql`
+      fragment OwnerApiSettings_info on OwnerInfo {
+        platform
+        uid
+        apiToken {
+          maskedToken
+        }
+        ...OwnerScopedTokenDialog_ownerInfo
+      }
+    `,
+    props.info,
+  );
 
+  let classes = useStyles();
+  let existingTokenComponent: null | JSX.Element = null;
+  let [newToken, setNewToken] = useState<string | null>(null);
+  let [openDialog, setOpenDialog] = useState(false);
+
+  const [commitGenerateNewTokenMutation] = useMutation<OwnerApiSettingsMutation>(graphql`
+    mutation OwnerApiSettingsMutation($input: GenerateNewOwnerAccessTokenInput!) {
+      generateNewOwnerAccessToken(input: $input) {
+        token
+      }
+    }
+  `);
   function generateNewAccessToken() {
     let input: GenerateNewOwnerAccessTokenInput = {
-      clientMutationId: `generate-api-token-${props.info.uid}`,
-      platform: props.info.platform,
-      ownerUid: props.info.uid,
+      clientMutationId: `generate-api-token-${info.uid}`,
+      platform: info.platform,
+      ownerUid: info.uid,
     };
 
-    commitMutation(environment, {
-      mutation: generateNewTokenMutation,
+    commitGenerateNewTokenMutation({
       variables: { input },
-      onCompleted: (response: OwnerApiSettingsMutationResponse) => {
+      onCompleted: (response: OwnerApiSettingsMutation$data, errors) => {
+        if (errors) {
+          console.log(errors);
+          return;
+        }
         setNewToken(response.generateNewOwnerAccessToken.token);
       },
       onError: err => console.error(err),
     });
   }
 
-  if (props.info.apiToken && props.info.apiToken.maskedToken) {
+  if (info.apiToken && info.apiToken.maskedToken) {
     existingTokenComponent = (
-      <Typography variant="subtitle1">Currently active token: {props.info.apiToken.maskedToken}</Typography>
+      <Typography variant="subtitle1">Currently active token: {info.apiToken.maskedToken}</Typography>
     );
   }
-  let newTokenComponent = null;
+  let newTokenComponent: null | JSX.Element = null;
   if (newToken) {
     newTokenComponent = (
       <TextField
@@ -80,14 +101,6 @@ function OwnerApiSettings(props: Props) {
     );
   }
 
-  let cardActions = (
-    <CardActions>
-      <Button variant="contained" onClick={() => generateNewAccessToken()}>
-        Generate New Token
-      </Button>
-    </CardActions>
-  );
-
   return (
     <div>
       <Card elevation={24}>
@@ -100,23 +113,19 @@ function OwnerApiSettings(props: Props) {
             </Link>{' '}
             for more details.
           </Typography>
-          {existingTokenComponent}
+          {newToken ? null : existingTokenComponent}
           {newTokenComponent}
         </CardContent>
-        {cardActions}
+        <CardActions>
+          <Button variant="contained" onClick={() => generateNewAccessToken()}>
+            {info.apiToken ? 'Invalidate All Tokens' : 'Generate New Token'}
+          </Button>
+          <Button variant="contained" onClick={() => setOpenDialog(true)}>
+            Generate a scoped repository Token
+          </Button>
+        </CardActions>
       </Card>
+      <OwnerScopedTokenDialog ownerInfo={info} open={openDialog} onClose={() => setOpenDialog(!openDialog)} />
     </div>
   );
 }
-
-export default createFragmentContainer(withStyles(styles)(OwnerApiSettings), {
-  info: graphql`
-    fragment OwnerApiSettings_info on OwnerInfo {
-      platform
-      uid
-      apiToken {
-        maskedToken
-      }
-    }
-  `,
-});

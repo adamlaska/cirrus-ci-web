@@ -1,37 +1,49 @@
 import React from 'react';
+import { useLazyLoadQuery } from 'react-relay';
+import { useParams } from 'react-router-dom';
 
-import { QueryRenderer } from 'react-relay';
 import { graphql } from 'babel-plugin-relay/macro';
 
-import environment from '../../createRelayEnvironment';
-import CirrusLinearProgress from '../../components/common/CirrusLinearProgress';
-import { OwnerQuery } from './__generated__/OwnerQuery.graphql';
-import { useParams } from 'react-router-dom';
-import OwnerRepositoryList from '../../components/account/OwnerRepositoryList';
-import NotFound from '../NotFound';
+import OwnerRepositoryList from 'components/account/OwnerRepositoryList';
+import AppBreadcrumbs from 'components/common/AppBreadcrumbs';
+import NotFound from 'scenes/NotFound';
 
-export default function Owner(): JSX.Element {
-  let { platform, owner } = useParams();
-  return (
-    <QueryRenderer<OwnerQuery>
-      environment={environment}
-      variables={{ platform, owner }}
-      query={graphql`
-        query OwnerQuery($platform: String!, $owner: String!) {
-          ownerInfoByName(platform: $platform, name: $owner) {
-            ...OwnerRepositoryList_info
-          }
+import { OwnerQuery } from './__generated__/OwnerQuery.graphql';
+
+function OwnerFor(platform: string, owner: string) {
+  const response = useLazyLoadQuery<OwnerQuery>(
+    graphql`
+      query OwnerQuery($platform: String!, $owner: String!) {
+        ownerInfoByName(platform: $platform, name: $owner) {
+          ...OwnerRepositoryList_info
+          ...AppBreadcrumbs_info
         }
-      `}
-      render={({ error, props }) => {
-        if (!props) {
-          return <CirrusLinearProgress />;
+        viewer {
+          ...AppBreadcrumbs_viewer
         }
-        if (!props.ownerInfoByName) {
-          return <NotFound />;
-        }
-        return <OwnerRepositoryList info={props.ownerInfoByName} />;
-      }}
-    />
+      }
+    `,
+    { platform, owner },
   );
+
+  if (!response.ownerInfoByName) {
+    return <NotFound />;
+  }
+
+  return (
+    <>
+      <AppBreadcrumbs info={response.ownerInfoByName} viewer={response.viewer} />
+      <OwnerRepositoryList info={response.ownerInfoByName} />
+    </>
+  );
+}
+
+export default function Owner() {
+  let { platform, owner } = useParams();
+
+  if (!platform || !owner) {
+    return <NotFound />;
+  }
+
+  return OwnerFor(platform, owner);
 }

@@ -1,10 +1,10 @@
 import React from 'react';
-import createStyles from '@mui/styles/createStyles';
-import { withStyles, WithStyles } from '@mui/styles';
-import { Typography } from '@mui/material';
 
-const styles = theme =>
-  createStyles({
+import { Typography } from '@mui/material';
+import { makeStyles } from '@mui/styles';
+
+const useStyles = makeStyles(theme => {
+  return {
     gapped: {
       paddingTop: theme.spacing(2),
       paddingBottom: theme.spacing(1),
@@ -29,21 +29,24 @@ const styles = theme =>
       width: '1%',
       minWidth: theme.spacing(5),
       textAlign: 'right',
+      userSelect: 'none',
     },
     lineContent: {
       fontFamily: 'Monaco, monospace',
       paddingLeft: theme.spacing(1),
       whiteSpace: 'pre-wrap',
     },
-  });
+  };
+});
 
-interface Props extends WithStyles<typeof styles> {
+interface Props {
   readonly title: string;
   readonly lines: ReadonlyArray<string>;
 }
 
 function InlineLogs(props: Props) {
-  let { title, lines, classes } = props;
+  let { title, lines } = props;
+  let classes = useStyles();
 
   if (!lines || lines.length === 0) {
     lines = [''];
@@ -72,4 +75,4 @@ function InlineLogs(props: Props) {
   );
 }
 
-export default withStyles(styles)(InlineLogs);
+export default InlineLogs;

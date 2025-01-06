@@ -1,34 +1,43 @@
 import React from 'react';
+
 import DialogContent from '@mui/material/DialogContent/DialogContent';
-import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
-import { DeliveryInfoDialogLazyContentQueryResponse } from './__generated__/DeliveryInfoDialogLazyContentQuery.graphql';
-import { WithStyles } from '@mui/styles';
-import createStyles from '@mui/styles/createStyles';
-import withStyles from '@mui/styles/withStyles';
-import MarkdownTypography from '../common/MarkdownTypography';
+import Tabs from '@mui/material/Tabs';
+import { makeStyles } from '@mui/styles';
 
-const styles = theme =>
-  createStyles({
+import MarkdownTypography from 'components/common/MarkdownTypography';
+
+import { DeliveryInfoDialogLazyContentQuery$data } from './__generated__/DeliveryInfoDialogLazyContentQuery.graphql';
+
+const useStyles = makeStyles(theme => {
+  return {
     markdown: {
-      color: theme.palette.contrastText,
+      color: theme.palette.primary.contrastText,
     },
-  });
+  };
+});
 
-interface Props extends WithStyles<typeof styles> {
-  delivery: DeliveryInfoDialogLazyContentQueryResponse['webhookDelivery'];
+interface Props {
+  delivery: DeliveryInfoDialogLazyContentQuery$data['webhookDelivery'];
 }
 
 function DeliveryInfoDialogContent(props: Props) {
   let [value, setValue] = React.useState(0);
 
-  const { delivery, classes } = props;
+  const { delivery } = props;
+  let classes = useStyles();
 
   let payloadTab = (
-    <MarkdownTypography className={classes.markdown} text={'```json\n' + delivery.payload.data + '\n```'} />
+    <MarkdownTypography
+      className={classes.markdown}
+      text={delivery ? '```json\n' + delivery.payload.data + '\n```' : ''}
+    />
   );
   let responseTab = (
-    <MarkdownTypography className={classes.markdown} text={'```\n' + delivery.response.data + '\n```'} />
+    <MarkdownTypography
+      className={classes.markdown}
+      text={delivery ? '```\n' + delivery.response.data + '\n```' : ''}
+    />
   );
 
   return (
@@ -49,4 +58,4 @@ function DeliveryInfoDialogContent(props: Props) {
   );
 }
 
-export default withStyles(styles)(DeliveryInfoDialogContent);
+export default DeliveryInfoDialogContent;

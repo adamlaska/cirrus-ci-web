@@ -1,24 +1,36 @@
 import React from 'react';
+import { useFragment } from 'react-relay';
 
+import { graphql } from 'babel-plugin-relay/macro';
+
+import TimerIcon from '@mui/icons-material/Timer';
+import { useTheme } from '@mui/material';
 import Avatar from '@mui/material/Avatar';
 import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
-import TimerIcon from '@mui/icons-material/Timer';
-import { graphql } from 'babel-plugin-relay/macro';
-import { formatDuration } from '../../utils/time';
-import { TaskTimeoutChip_task } from './__generated__/TaskTimeoutChip_task.graphql';
-import { createFragmentContainer } from 'react-relay';
-import { useTheme } from '@mui/material';
+
+import { formatDuration } from 'utils/time';
+
+import { TaskTimeoutChip_task$key } from './__generated__/TaskTimeoutChip_task.graphql';
 
 interface Props {
-  task: TaskTimeoutChip_task;
+  task: TaskTimeoutChip_task$key;
   className?: string;
 }
 
-function TaskTimeoutChip(props: Props) {
+export default function TaskTimeoutChip(props: Props) {
+  let task = useFragment(
+    graphql`
+      fragment TaskTimeoutChip_task on Task {
+        timeoutInSeconds
+      }
+    `,
+    props.task,
+  );
+
   let theme = useTheme();
 
-  let { timeoutInSeconds } = props.task;
+  let { timeoutInSeconds } = task;
   let defaultTimeout = timeoutInSeconds === 3600; // 1 hour
   if (defaultTimeout) return <div />;
 
@@ -36,11 +48,3 @@ function TaskTimeoutChip(props: Props) {
     </Tooltip>
   );
 }
-
-export default createFragmentContainer(TaskTimeoutChip, {
-  task: graphql`
-    fragment TaskTimeoutChip_task on Task {
-      timeoutInSeconds
-    }
-  `,
-});

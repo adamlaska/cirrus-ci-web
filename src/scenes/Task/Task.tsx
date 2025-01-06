@@ -1,37 +1,49 @@
 import React from 'react';
-
-import { QueryRenderer } from 'react-relay';
-import { graphql } from 'babel-plugin-relay/macro';
-
-import environment from '../../createRelayEnvironment';
-import TaskDetails from '../../components/tasks/TaskDetails';
-import CirrusLinearProgress from '../../components/common/CirrusLinearProgress';
-import NotFound from '../NotFound';
-import { TaskQuery } from './__generated__/TaskQuery.graphql';
+import { useLazyLoadQuery } from 'react-relay';
 import { useParams } from 'react-router-dom';
 
-export default function Task(): JSX.Element {
-  let { taskId } = useParams();
-  return (
-    <QueryRenderer<TaskQuery>
-      environment={environment}
-      variables={{ taskId }}
-      query={graphql`
-        query TaskQuery($taskId: ID!) {
-          task(id: $taskId) {
-            ...TaskDetails_task
-          }
+import { graphql } from 'babel-plugin-relay/macro';
+
+import AppBreadcrumbs from 'components/common/AppBreadcrumbs';
+import TaskDetails from 'components/tasks/TaskDetails';
+import NotFound from 'scenes/NotFound';
+
+import { TaskQuery } from './__generated__/TaskQuery.graphql';
+
+function TaskById(taskId: string) {
+  const response = useLazyLoadQuery<TaskQuery>(
+    graphql`
+      query TaskQuery($taskId: ID!) {
+        task(id: $taskId) {
+          ...TaskDetails_task
+          ...AppBreadcrumbs_task
         }
-      `}
-      render={({ error, props }) => {
-        if (!props) {
-          return <CirrusLinearProgress />;
+        viewer {
+          ...AppBreadcrumbs_viewer
         }
-        if (!props.task) {
-          return <NotFound message={error} />;
-        }
-        return <TaskDetails task={props.task} />;
-      }}
-    />
+      }
+    `,
+    { taskId },
   );
+
+  if (!response.task) {
+    return <NotFound />;
+  }
+
+  return (
+    <>
+      <AppBreadcrumbs task={response.task} viewer={response.viewer} />
+      <TaskDetails task={response.task} />
+    </>
+  );
+}
+
+export default function Task() {
+  let { taskId } = useParams();
+
+  if (!taskId) {
+    return <NotFound />;
+  }
+
+  return TaskById(taskId);
 }

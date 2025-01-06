@@ -1,15 +1,17 @@
-import React from 'react';
-import AnsiUp from 'ansi_up';
+import React, { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+
+import AnsiUp from 'ansi_up';
 import classNames from 'classnames';
-import { createStyles, WithStyles, withStyles } from '@mui/styles';
-import * as queryString from 'query-string';
+import queryString from 'query-string';
+
+import { makeStyles } from '@mui/styles';
 
 let ansiFormatter = new (AnsiUp as any)();
 ansiFormatter.use_classes = true;
 
-let styles = theme =>
-  createStyles({
+const useStyles = makeStyles(theme => {
+  return {
     logContainer: {
       overflowY: 'hidden',
       minHeight: '70px',
@@ -37,11 +39,13 @@ let styles = theme =>
     logLineHighlighted: {
       background: theme.palette.secondary.dark,
     },
-  });
+  };
+});
 
-interface Props extends WithStyles<typeof styles> {
+interface Props {
   logsName: string;
   logs: string;
+  stripTimestamps?: boolean;
 }
 
 function Logs(props: Props) {
@@ -60,11 +64,19 @@ function Logs(props: Props) {
 
     highLightedLineStart = parseInt(startLine.replace('L', ''), 10);
     highLightedLineEnd = parseInt(endLine.replace('L', ''), 10);
-    let elementToFocus = document.getElementById(startLine);
-    if (elementToFocus) {
-      elementToFocus.focus();
-    }
   }
+
+  useEffect(() => {
+    if (isNaN(highLightedLineStart)) {
+      return;
+    }
+
+    let startLine = document.getElementById(`L${highLightedLineStart}`);
+
+    if (startLine) {
+      startLine.focus();
+    }
+  }, [highLightedLineStart]);
 
   function selectLine(event, lineNumber) {
     let lineRange = `L${lineNumber}`;
@@ -77,23 +89,33 @@ function Logs(props: Props) {
     });
   }
 
-  let { classes } = props;
+  let classes = useStyles();
   return (
     <div className={classes.logContainer}>
-      {props.logs.split('\n').map((line, index) => (
-        <div
-          id={'L' + index}
-          tabIndex={0} // to make it focusable
-          key={index}
-          className={classNames('log-line', classes.logLine, {
-            [classes.logLineHighlighted]: highLightedLineStart <= index && index <= highLightedLineEnd,
-          })}
-          onClick={e => selectLine(e, index)}
-          dangerouslySetInnerHTML={{ __html: ansiFormatter.ansi_to_html(line) }}
-        />
-      ))}
+      {props.logs.split('\n').map((line, index) => {
+        // Cirrus CI Agent uses exactly 15 characters for the timestamps[1]
+        // and they all start with a "[" prefix.
+        //
+        // [1]: https://github.com/cirruslabs/cirrus-ci-agent/blob/a4bc09e4e8c8190158f5859854995d13fba3d335/internal/executor/logs.go#L85
+        if (props.stripTimestamps && line.startsWith('[')) {
+          line = line.slice(15);
+        }
+
+        return (
+          <div
+            id={'L' + index}
+            tabIndex={0} // to make it focusable
+            key={index}
+            className={classNames('log-line', classes.logLine, {
+              [classes.logLineHighlighted]: highLightedLineStart <= index && index <= highLightedLineEnd,
+            })}
+            onClick={e => selectLine(e, index)}
+            dangerouslySetInnerHTML={{ __html: ansiFormatter.ansi_to_html(line) }}
+          />
+        );
+      })}
     </div>
   );
 }
 
-export default withStyles(styles)(Logs);
+export default Logs;

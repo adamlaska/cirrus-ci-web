@@ -1,24 +1,40 @@
 import React from 'react';
+import { useFragment } from 'react-relay';
 
+import { graphql } from 'babel-plugin-relay/macro';
+
+import Star from '@mui/icons-material/Star';
+import { useTheme } from '@mui/material';
 import Avatar from '@mui/material/Avatar';
 import Chip from '@mui/material/Chip';
-import Star from '@mui/icons-material/Star';
 import Tooltip from '@mui/material/Tooltip';
-import { graphql } from 'babel-plugin-relay/macro';
-import { isTaskFinalStatus } from '../../utils/status';
-import { createFragmentContainer } from 'react-relay';
-import { TaskTransactionChip_task } from './__generated__/TaskTransactionChip_task.graphql';
-import { useTheme } from '@mui/material';
+
+import { isTaskFinalStatus } from 'utils/status';
+
+import { TaskTransactionChip_task$key } from './__generated__/TaskTransactionChip_task.graphql';
 
 interface Props {
-  task: TaskTransactionChip_task;
+  task: TaskTransactionChip_task$key;
   className?: string;
 }
 
-function TaskTransactionChip(props: Props) {
+export default function TaskTransactionChip(props: Props) {
+  let task = useFragment(
+    graphql`
+      fragment TaskTransactionChip_task on Task {
+        status
+        usedComputeCredits
+        transaction {
+          creditsAmount
+          initialCreditsAmount
+        }
+      }
+    `,
+    props.task,
+  );
+
   let theme = useTheme();
 
-  let task = props.task;
   let { transaction, usedComputeCredits } = task;
   if (!usedComputeCredits) {
     return <div />;
@@ -49,16 +65,3 @@ function TaskTransactionChip(props: Props) {
     </Tooltip>
   );
 }
-
-export default createFragmentContainer(TaskTransactionChip, {
-  task: graphql`
-    fragment TaskTransactionChip_task on Task {
-      status
-      usedComputeCredits
-      transaction {
-        creditsAmount
-        initialCreditsAmount
-      }
-    }
-  `,
-});

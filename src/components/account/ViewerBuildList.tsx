@@ -1,72 +1,62 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { Helmet } from 'react-helmet';
 import { useRefetchableFragment } from 'react-relay';
+
 import { graphql } from 'babel-plugin-relay/macro';
-import { useNavigate } from 'react-router-dom';
 
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableRow from '@mui/material/TableRow';
-
+import { ToggleButton, ToggleButtonGroup } from '@mui/material';
 import Paper from '@mui/material/Paper';
 import Toolbar from '@mui/material/Toolbar';
-import RepositoryNameChip from '../chips/RepositoryNameChip';
-import BuildBranchNameChip from '../chips/BuildBranchNameChip';
-import BuildStatusChip from '../chips/BuildStatusChip';
-import BuildChangeChip from '../chips/BuildChangeChip';
-import { navigateBuildHelper } from '../../utils/navigateHelper';
 import Typography from '@mui/material/Typography';
-import { WithStyles } from '@mui/styles';
-import withStyles from '@mui/styles/withStyles';
-import { Helmet as Head } from 'react-helmet';
-import { Box, ToggleButton, ToggleButtonGroup } from '@mui/material';
-import MarkdownTypography from '../common/MarkdownTypography';
+import { makeStyles } from '@mui/styles';
+
+import BuildCard from 'components/builds/BuildCard';
+import MarkdownTypography from 'components/common/MarkdownTypography';
+import { isBuildFinalStatus } from 'utils/status';
+
 import { ViewerBuildListRefetchQuery } from './__generated__/ViewerBuildListRefetchQuery.graphql';
 import { ViewerBuildList_viewer$key } from './__generated__/ViewerBuildList_viewer.graphql';
-import { isBuildFinalStatus } from '../../utils/status';
 
-const styles = theme => ({
-  chip: {
-    margin: theme.spacing(0.5),
-  },
-  cell: {
-    width: '100%',
-    maxWidth: '600px',
-  },
-  emptyBuilds: {
-    margin: theme.spacing(1.0),
-  },
-  padding: {
-    margin: theme.spacing(0.5),
-  },
+// todo: move custom values to mui theme adjustments
+const useStyles = makeStyles(theme => {
+  return {
+    paper: {
+      marginTop: theme.spacing(4),
+      padding: theme.spacing(1.0, 2.5, 1.5),
+      boxShadow: '0 16px 52px rgb(0 0 0 / 13%)',
+      borderRadius: 4 * theme.shape.borderRadius,
+    },
+    header: {
+      paddingLeft: 14,
+      justifyContent: 'space-between',
+    },
+    emptyBuilds: {
+      margin: theme.spacing(1.0),
+      marginLeft: 14,
+    },
+  };
 });
 
-interface Props extends WithStyles<typeof styles> {
+interface Props {
   viewer: ViewerBuildList_viewer$key;
 }
 
 function ViewerBuildList(props: Props) {
-  let { viewer, classes } = props;
+  let { viewer } = props;
+  let classes = useStyles();
 
-  const [data, refetch] = useRefetchableFragment<ViewerBuildListRefetchQuery, any>(
+  const [data, refetch] = useRefetchableFragment<ViewerBuildListRefetchQuery, ViewerBuildList_viewer$key>(
     graphql`
       fragment ViewerBuildList_viewer on Query
-      @argumentDefinitions(statuses: { type: "[BuildStatus]" })
+      @argumentDefinitions(statuses: { type: "[BuildStatus!]" })
       @refetchable(queryName: "ViewerBuildListRefetchQuery") {
         viewer {
           builds(last: 50, statuses: $statuses) {
             edges {
               node {
                 id
-                changeMessageTitle
-                durationInSeconds
                 status
-                ...BuildBranchNameChip_build
-                ...BuildChangeChip_build
-                ...BuildStatusChip_build
-                repository {
-                  ...RepositoryNameChip_repository
-                }
+                ...BuildCard_build
               }
             }
           }
@@ -76,69 +66,14 @@ function ViewerBuildList(props: Props) {
     viewer,
   );
 
-  let navigate = useNavigate();
-
-  function buildItem(build) {
-    let { classes } = props;
-
-    return (
-      <TableRow
-        key={build.id}
-        onClick={e => navigateBuildHelper(navigate, e, build.id)}
-        hover={true}
-        style={{ cursor: 'pointer' }}
-      >
-        <TableCell className={classes.padding}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'start' }}>
-            <RepositoryNameChip repository={build.repository} fullName={true} className={classes.chip} />
-            <BuildBranchNameChip build={build} className={classes.chip} />
-            <BuildChangeChip build={build} className={classes.chip} />
-            <Box component="span" sx={{ display: { xs: 'block', sm: 'none' } }}>
-              <BuildStatusChip build={build} className={classes.chip} />
-            </Box>
-          </div>
-        </TableCell>
-        <TableCell className={classes.cell}>
-          <div>
-            <MarkdownTypography text={build.changeMessageTitle} variant="body1" color="inherit" />
-          </div>
-        </TableCell>
-        <TableCell className={classes.cell} sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
-          <BuildStatusChip build={build} className={classes.chip} />
-        </TableCell>
-      </TableRow>
-    );
-  }
-
   const [filter, setFilter] = useState('all');
 
-  let builds = [];
-
-  if (data.viewer.builds) {
-    builds = data.viewer.builds.edges
+  let builds =
+    data?.viewer?.builds.edges
       .map(edge => edge.node)
       .filter(build => {
         return !(filter === 'running' && isBuildFinalStatus(build.status));
-      });
-  }
-
-  let buildsComponent = (
-    <Table style={{ tableLayout: 'auto' }}>
-      <TableBody>{builds.map(build => buildItem(build))}</TableBody>
-    </Table>
-  );
-  if (builds.length === 0) {
-    buildsComponent = (
-      <div className={classes.emptyBuilds}>
-        <MarkdownTypography
-          text={
-            'No recent builds! Please check the [documentation](https://cirrus-ci.org/) on how to start with Cirrus CI.'
-          }
-        />
-      </div>
-    );
-  }
-
+      }) || [];
   const handleFilterChange = (event, newFilter) => {
     // This prevents the depressing of the toggle button
     // without pressing another button.
@@ -159,22 +94,30 @@ function ViewerBuildList(props: Props) {
   };
 
   return (
-    <Paper elevation={16}>
-      <Head>
+    <Paper className={classes.paper}>
+      <Helmet>
         <title>Recent Builds - Cirrus CI</title>
-      </Head>
-      <Toolbar>
-        <Typography variant="h6" sx={{ flexGrow: 1 }}>
-          Recent Builds
-        </Typography>
+      </Helmet>
+      <Toolbar className={classes.header} disableGutters>
+        <Typography variant="h5">Recent Builds</Typography>
         <ToggleButtonGroup value={filter} exclusive onChange={handleFilterChange}>
           <ToggleButton value="all">All</ToggleButton>
           <ToggleButton value="running">Running</ToggleButton>
         </ToggleButtonGroup>
       </Toolbar>
-      {buildsComponent}
+      {builds.length === 0 ? (
+        <div className={classes.emptyBuilds}>
+          <MarkdownTypography
+            text={
+              'No recent builds! Please check the [documentation](https://cirrus-ci.org/) on how to start with Cirrus CI.'
+            }
+          />
+        </div>
+      ) : (
+        builds.map(build => <BuildCard key={build.id} build={build} />)
+      )}
     </Paper>
   );
 }
 
-export default withStyles(styles)(ViewerBuildList);
+export default ViewerBuildList;

@@ -1,19 +1,14 @@
 import React, { ReactNode } from 'react';
-import { Alert, Theme } from '@mui/material';
-import createStyles from '@mui/styles/createStyles';
-import { WithStyles } from '@mui/styles';
-import withStyles from '@mui/styles/withStyles';
-import { createFragmentContainer } from 'react-relay';
-import { graphql } from 'babel-plugin-relay/macro';
-import { ConfigurationWithIssues_build } from './__generated__/ConfigurationWithIssues_build.graphql';
-import Accordion from '@mui/material/Accordion';
-import AccordionSummary from '@mui/material/AccordionSummary';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import Typography from '@mui/material/Typography';
-import AccordionDetails from '@mui/material/AccordionDetails';
+import { useFragment } from 'react-relay';
 
-const styles = (theme: Theme) =>
-  createStyles({
+import { graphql } from 'babel-plugin-relay/macro';
+
+import mui from 'mui';
+
+import { ConfigurationWithIssues_build$key } from './__generated__/ConfigurationWithIssues_build.graphql';
+
+const useStyles = mui.makeStyles(theme => {
+  return {
     configurationTable: {
       color: theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.dark,
       background: theme.palette.mode === 'dark' ? theme.palette.primary.dark : theme.palette.primary.light,
@@ -46,14 +41,34 @@ const styles = (theme: Theme) =>
     topPadded: {
       paddingTop: theme.spacing(2),
     },
-  });
+  };
+});
 
-interface Props extends WithStyles<typeof styles> {
-  build: ConfigurationWithIssues_build;
+interface Props {
+  build: ConfigurationWithIssues_build$key;
 }
 
-function ConfigurationWithIssues(props: Props) {
-  let { build, classes } = props;
+export default function ConfigurationWithIssues(props: Props) {
+  let build = useFragment(
+    graphql`
+      fragment ConfigurationWithIssues_build on Build {
+        parsingResult {
+          rawStarlarkConfig
+          processedYamlConfig
+          issues {
+            level
+            message
+            path
+            line
+            column
+          }
+        }
+      }
+    `,
+    props.build,
+  );
+
+  let classes = useStyles();
 
   if (!build.parsingResult || build.parsingResult.issues.length === 0) {
     return null;
@@ -86,9 +101,9 @@ function ConfigurationWithIssues(props: Props) {
     if (issuesForLine === undefined || issuesForLine.length === 0) return null;
 
     const renderedIssues = issuesForLine.map(issue => (
-      <Alert className={classes.issue} severity={issue.level.toLowerCase()}>
+      <mui.Alert className={classes.issue} severity={issue.level.toLowerCase()}>
         {issue.message}
-      </Alert>
+      </mui.Alert>
     ));
 
     return (
@@ -113,9 +128,9 @@ function ConfigurationWithIssues(props: Props) {
 
     const extraLines = issueCache.get(0)
       ? issueCache.get(0).map(issue => [
-          <Alert className={classes.issue} severity={issue.level.toLowerCase()}>
+          <mui.Alert className={classes.issue} severity={issue.level.toLowerCase()}>
             {issue.message}
-          </Alert>,
+          </mui.Alert>,
         ])
       : null;
 
@@ -140,18 +155,18 @@ function ConfigurationWithIssues(props: Props) {
   const starlarkIssueCache = cacheIssues(starlarkIssues);
   const starlarkTable = generateTable(build.parsingResult.rawStarlarkConfig, starlarkIssueCache);
 
-  let yamlTitle = (
-    <Typography variant="subtitle1">
+  let yamlTitle: JSX.Element | null = (
+    <mui.Typography variant="subtitle1">
       <p>YAML configuration</p>
-    </Typography>
+    </mui.Typography>
   );
-  let starlarkTitle = (
-    <Typography variant="subtitle1" className={classes.topPadded}>
+  let starlarkTitle: JSX.Element | null = (
+    <mui.Typography variant="subtitle1" className={classes.topPadded}>
       <p>Starlark configuration</p>
-    </Typography>
+    </mui.Typography>
   );
 
-  let summaryText: string;
+  let summaryText: string | null = null;
 
   const yamlHasErrors = yamlIssues.some(it => it.level === 'ERROR');
   const yamlHasIssues = yamlIssues.some(it => it.level !== 'ERROR');
@@ -181,34 +196,16 @@ function ConfigurationWithIssues(props: Props) {
   }
 
   return (
-    <Accordion defaultExpanded={yamlHasErrors || starlarkHasErrors}>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Typography variant="h6">{summaryText}</Typography>
-      </AccordionSummary>
-      <AccordionDetails className={classes.columnFlexDirection}>
+    <mui.Accordion defaultExpanded={yamlHasErrors || starlarkHasErrors}>
+      <mui.AccordionSummary expandIcon={<mui.icons.ExpandMore />}>
+        <mui.Typography variant="h6">{summaryText}</mui.Typography>
+      </mui.AccordionSummary>
+      <mui.AccordionDetails className={classes.columnFlexDirection}>
         {yamlTitle}
         {yamlTable}
         {starlarkTitle}
         {starlarkTable}
-      </AccordionDetails>
-    </Accordion>
+      </mui.AccordionDetails>
+    </mui.Accordion>
   );
 }
-
-export default createFragmentContainer(withStyles(styles)(ConfigurationWithIssues), {
-  build: graphql`
-    fragment ConfigurationWithIssues_build on Build {
-      parsingResult {
-        rawStarlarkConfig
-        processedYamlConfig
-        issues {
-          level
-          message
-          path
-          line
-          column
-        }
-      }
-    }
-  `,
-});

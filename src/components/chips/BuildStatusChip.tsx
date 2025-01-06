@@ -1,16 +1,21 @@
+import React, { useEffect, useMemo } from 'react';
+import { useFragment, requestSubscription } from 'react-relay';
+
+import { graphql } from 'babel-plugin-relay/macro';
+
+import { useTheme } from '@mui/material';
 import Avatar from '@mui/material/Avatar';
 import Chip from '@mui/material/Chip';
 import Icon from '@mui/material/Icon';
 import Tooltip from '@mui/material/Tooltip';
-import { graphql } from 'babel-plugin-relay/macro';
-import React, { useEffect } from 'react';
-import { createFragmentContainer, requestSubscription } from 'react-relay';
-import environment from '../../createRelayEnvironment';
-import { useBuildStatusColor } from '../../utils/colors';
-import { buildStatusIconName, buildStatusMessage, isBuildFinalStatus } from '../../utils/status';
-import { formatDuration } from '../../utils/time';
-import { BuildStatusChip_build } from './__generated__/BuildStatusChip_build.graphql';
-import { useTheme } from '@mui/material';
+
+import environment from 'createRelayEnvironment';
+
+import { useBuildStatusColor } from 'utils/colors';
+import { buildStatusIconName, buildStatusMessage, isBuildFinalStatus } from 'utils/status';
+import { formatDuration } from 'utils/time';
+
+import { BuildStatusChip_build$key } from './__generated__/BuildStatusChip_build.graphql';
 
 const buildSubscription = graphql`
   subscription BuildStatusChipSubscription($buildID: ID!) {
@@ -21,20 +26,34 @@ const buildSubscription = graphql`
 `;
 
 interface Props {
-  build: BuildStatusChip_build;
+  build: BuildStatusChip_build$key;
   className?: string;
   mini?: boolean;
 }
 
-function BuildStatusChip(props: Props) {
+export default function BuildStatusChip(props: Props) {
+  let build = useFragment(
+    graphql`
+      fragment BuildStatusChip_build on Build {
+        id
+        status
+        hasPausedTasks
+        durationInSeconds
+        clockDurationInSeconds
+      }
+    `,
+    props.build,
+  );
+
   let theme = useTheme();
 
+  const isFinalStatus = useMemo(() => isBuildFinalStatus(build.status), [build.status]);
   useEffect(() => {
-    if (isBuildFinalStatus(props.build.status)) {
+    if (isFinalStatus) {
       return;
     }
 
-    let variables = { buildID: props.build.id };
+    let variables = { buildID: build.id };
 
     const subscription = requestSubscription(environment, {
       subscription: buildSubscription,
@@ -43,16 +62,17 @@ function BuildStatusChip(props: Props) {
     return () => {
       subscription.dispose();
     };
-  }, [props.build.id, props.build.status]);
+  }, [build.id, isFinalStatus]);
 
-  let { build, mini, className } = props;
+  let { mini, className } = props;
   let message = buildStatusMessage(build.status, build.durationInSeconds);
   let buildStatusColor = useBuildStatusColor(build.status);
+  let buildStatusIcon = build.hasPausedTasks ? 'pause' : buildStatusIconName(build.status);
   if (mini) {
     return (
       <Tooltip title={message}>
         <Avatar style={{ background: buildStatusColor }} className={className}>
-          <Icon style={{ color: theme.palette.primary.contrastText }}>{buildStatusIconName(build.status)}</Icon>
+          <Icon style={{ color: theme.palette.primary.contrastText }}>{buildStatusIcon}</Icon>
         </Avatar>
       </Tooltip>
     );
@@ -70,21 +90,10 @@ function BuildStatusChip(props: Props) {
         label={message}
         avatar={
           <Avatar style={{ background: buildStatusColor }}>
-            <Icon style={{ color: theme.palette.primary.contrastText }}>{buildStatusIconName(build.status)}</Icon>
+            <Icon style={{ color: theme.palette.primary.contrastText }}>{buildStatusIcon}</Icon>
           </Avatar>
         }
       />
     </Tooltip>
   );
 }
-
-export default createFragmentContainer(BuildStatusChip, {
-  build: graphql`
-    fragment BuildStatusChip_build on Build {
-      id
-      status
-      durationInSeconds
-      clockDurationInSeconds
-    }
-  `,
-});

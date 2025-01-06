@@ -1,37 +1,52 @@
-import React from 'react';
-
-import { QueryRenderer } from 'react-relay';
-import { graphql } from 'babel-plugin-relay/macro';
-
-import environment from '../../createRelayEnvironment';
-import CirrusLinearProgress from '../../components/common/CirrusLinearProgress';
-import NotFound from '../NotFound';
-import PoolDetails from '../../components/workers/PoolDetails';
-import { PoolByIdQuery } from './__generated__/PoolByIdQuery.graphql';
+import React, { useEffect, useState } from 'react';
+import { useLazyLoadQuery } from 'react-relay';
 import { useParams } from 'react-router-dom';
 
-export default function PoolById(): JSX.Element {
-  let { poolId } = useParams();
-  return (
-    <QueryRenderer<PoolByIdQuery>
-      environment={environment}
-      variables={{ poolId }}
-      query={graphql`
-        query PoolByIdQuery($poolId: ID!) {
-          persistentWorkerPool(poolId: $poolId) {
-            ...PoolDetails_pool
-          }
+import { graphql } from 'babel-plugin-relay/macro';
+
+import PoolDetails from 'components/workers/PoolDetails';
+import NotFound from 'scenes/NotFound';
+
+import { PoolByIdQuery } from './__generated__/PoolByIdQuery.graphql';
+
+function PoolDetailsById(poolId: string) {
+  const [fetchKey, setFetchKey] = useState(0);
+
+  useEffect(() => {
+    const timeoutId = setInterval(() => {
+      setFetchKey(fetchKey + 1);
+    }, 10_000);
+    return () => clearInterval(timeoutId);
+  });
+
+  const response = useLazyLoadQuery<PoolByIdQuery>(
+    graphql`
+      query PoolByIdQuery($poolId: ID!) {
+        persistentWorkerPool(poolId: $poolId) {
+          ...PoolDetails_pool
         }
-      `}
-      render={({ error, props }) => {
-        if (!props) {
-          return <CirrusLinearProgress />;
-        }
-        if (!props.persistentWorkerPool) {
-          return <NotFound message={error} />;
-        }
-        return <PoolDetails pool={props.persistentWorkerPool} />;
-      }}
-    />
+      }
+    `,
+    { poolId },
+    {
+      fetchKey: fetchKey,
+      fetchPolicy: 'store-and-network',
+    },
   );
+
+  // todo: pass error message to <NotFound>
+  if (!response.persistentWorkerPool) {
+    return <NotFound />;
+  }
+  return <PoolDetails pool={response.persistentWorkerPool} />;
+}
+
+export default function PoolById() {
+  let { poolId } = useParams();
+
+  if (!poolId) {
+    return <NotFound />;
+  }
+
+  return PoolDetailsById(poolId);
 }

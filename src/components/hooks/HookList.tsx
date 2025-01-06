@@ -1,35 +1,46 @@
 import React from 'react';
+import { useFragment } from 'react-relay';
+
+import { graphql } from 'babel-plugin-relay/macro';
+
+import { Card, CardContent, Link, Typography } from '@mui/material';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
-import HookListRow from './HookListRow';
-import { FragmentRefs } from 'relay-runtime';
-import { Card, CardContent, Link, Theme, Typography } from '@mui/material';
-import createStyles from '@mui/styles/createStyles';
-import { HookType } from './HookType';
-import { WithStyles } from '@mui/styles';
-import withStyles from '@mui/styles/withStyles';
+import { makeStyles } from '@mui/styles';
 
-const styles = (theme: Theme) =>
-  createStyles({
+import HookListRow from './HookListRow';
+import { HookType } from './HookType';
+import { HookList_hooks$key } from './__generated__/HookList_hooks.graphql';
+
+const useStyles = makeStyles(theme => {
+  return {
     pre: {
       color: theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.dark,
       background: theme.palette.mode === 'dark' ? theme.palette.primary.dark : theme.palette.primary.light,
       padding: theme.spacing(0.5),
     },
-  });
+  };
+});
 
-interface Hook {
-  readonly timestamp: number;
-  readonly ' $fragmentRefs': FragmentRefs<'HookListRow_hook'>;
-}
-
-interface Props extends WithStyles<typeof styles> {
-  hooks: ReadonlyArray<Hook>;
+interface Props {
+  hooks: HookList_hooks$key;
   type: HookType;
 }
 
 function HooksList(props: Props) {
-  let { hooks, type, classes } = props;
+  const hooks = useFragment(
+    graphql`
+      fragment HookList_hooks on Hook @relay(plural: true) {
+        id
+        timestamp
+        ...HookListRow_hook
+      }
+    `,
+    props.hooks,
+  );
+
+  let { type } = props;
+  let classes = useStyles();
 
   if (hooks.length === 0) {
     const hookExampleTemplate = `load("cirrus", "env", "http")
@@ -95,7 +106,9 @@ def on_ENTITY_failed(ctx):
   }
 
   const sortedHooks = hooks.slice().sort(function (a, b) {
-    return b.timestamp - a.timestamp;
+    const aTimestamp = a.timestamp || 0;
+    const bTimestamp = b.timestamp || 0;
+    return bTimestamp - aTimestamp;
   });
 
   return (
@@ -109,4 +122,4 @@ def on_ENTITY_failed(ctx):
   );
 }
 
-export default withStyles(styles)(HooksList);
+export default HooksList;

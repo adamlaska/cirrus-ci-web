@@ -1,87 +1,87 @@
-import React from 'react';
-
-import Paper from '@mui/material/Paper';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import Tooltip from '@mui/material/Tooltip';
-import LastDefaultBranchBuildRow from '../builds/LastDefaultBranchBuildRow';
-import { WithStyles } from '@mui/styles';
-import withStyles from '@mui/styles/withStyles';
-import Toolbar from '@mui/material/Toolbar';
-import Typography from '@mui/material/Typography';
+import React, { useMemo } from 'react';
+import { useFragment } from 'react-relay';
 import { Link } from 'react-router-dom';
-import IconButton from '@mui/material/IconButton';
-import Settings from '@mui/icons-material/Settings';
-import { createFragmentContainer } from 'react-relay';
+
 import { graphql } from 'babel-plugin-relay/macro';
-import { OwnerRepositoryList_info } from './__generated__/OwnerRepositoryList_info.graphql';
+import { useRecoilValue } from 'recoil';
 
-let styles = {
-  gap: {
-    paddingTop: 16,
-  },
-};
+import { muiThemeOptions } from 'cirrusTheme';
+import mui from 'mui';
 
-interface Props extends WithStyles<typeof styles> {
-  info: OwnerRepositoryList_info;
+import RepositoryCard from 'components/repositories/RepositoryCard';
+import useThemeWithAdjustableBreakpoints from 'utils/useThemeWithAdjustableBreakpoints';
+
+import { OwnerRepositoryList_info$key } from './__generated__/OwnerRepositoryList_info.graphql';
+
+interface Props {
+  info: OwnerRepositoryList_info$key;
 }
 
-let OwnerRepositoryList = (props: Props) => {
-  let { classes, info } = props;
+export default function OwnerRepositoryList(props: Props) {
+  let info = useFragment(
+    graphql`
+      fragment OwnerRepositoryList_info on OwnerInfo {
+        platform
+        uid
+        name
+        viewerPermission
+        repositories(last: 50) {
+          edges {
+            node {
+              id
+              lastDefaultBranchBuild {
+                id
+              }
+              ...RepositoryCard_repository
+            }
+          }
+        }
+      }
+    `,
+    props.info,
+  );
 
-  let organizationSettings = null;
+  let theme = useRecoilValue(muiThemeOptions);
+  let themeWithAdjustableBreakpoints = useThemeWithAdjustableBreakpoints(theme);
+  const themeForNewDesign = useMemo(
+    () => mui.createTheme(themeWithAdjustableBreakpoints),
+    [themeWithAdjustableBreakpoints],
+  );
+
+  let organizationSettings: null | JSX.Element = null;
 
   if (info && info.viewerPermission === 'ADMIN') {
     organizationSettings = (
-      <Tooltip title="Owner Settings">
+      <mui.Tooltip title="Account Settings">
         <Link to={`/settings/${info.platform}/${info.name}`}>
-          <IconButton size="large">
-            <Settings />
-          </IconButton>
+          <mui.IconButton size="large">
+            <mui.icons.ManageAccounts />
+          </mui.IconButton>
         </Link>
-      </Tooltip>
+      </mui.Tooltip>
     );
   }
 
   return (
-    <div>
-      <Paper elevation={16}>
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
-          <Typography variant="h6" color="inherit">
-            {info.name}'s Repositories
-          </Typography>
-          {organizationSettings}
-        </Toolbar>
-      </Paper>
-      <div className={classes.gap} />
-      <Paper elevation={16}>
-        <Table style={{ tableLayout: 'auto' }}>
-          <TableBody>
-            {info.repositories.edges.map(edge => (
-              <LastDefaultBranchBuildRow key={edge.node.id} repository={edge.node} />
-            ))}
-          </TableBody>
-        </Table>
-      </Paper>
-    </div>
-  );
-};
+    <mui.ThemeProvider theme={themeForNewDesign}>
+      <mui.Toolbar sx={{ justifyContent: 'start' }} disableGutters>
+        <mui.Typography variant="h5" color="inherit" pr={0.5}>
+          Repositories
+        </mui.Typography>
+        {organizationSettings}
+      </mui.Toolbar>
 
-export default createFragmentContainer(withStyles(styles)(OwnerRepositoryList), {
-  info: graphql`
-    fragment OwnerRepositoryList_info on OwnerInfo {
-      platform
-      uid
-      name
-      viewerPermission
-      repositories(last: 50) {
-        edges {
-          node {
-            id
-            ...LastDefaultBranchBuildRow_repository
-          }
-        }
-      }
-    }
-  `,
-});
+      {/* CARDS */}
+      <mui.Grid container spacing={2}>
+        {info.repositories.edges.map(edge => {
+          if (!edge.node.lastDefaultBranchBuild) return null;
+          return (
+            <mui.Grid xs={12} sm={6} md={4} key={edge.node.id}>
+              <RepositoryCard repository={edge.node} />
+            </mui.Grid>
+          );
+        })}
+      </mui.Grid>
+    </mui.ThemeProvider>
+  );
+}

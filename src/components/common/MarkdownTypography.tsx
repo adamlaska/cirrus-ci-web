@@ -1,5 +1,6 @@
-import { Link, Typography, TypographyProps } from '@mui/material';
 import ReactMarkdown from 'react-markdown';
+
+import { Link, Typography, TypographyProps } from '@mui/material';
 
 interface MarkdownTypographyProps extends TypographyProps {
   text: string;
@@ -11,7 +12,7 @@ const MarkdownTypography = (props: MarkdownTypographyProps) => {
   return (
     <>
       {text.split('\n').map(line => {
-        return <MarkdownTypographyLine text={line} {...otherProps} />;
+        return <MarkdownTypographyLine key={line} text={line} {...otherProps} />;
       })}
     </>
   );

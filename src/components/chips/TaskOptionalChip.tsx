@@ -1,23 +1,33 @@
 import React from 'react';
+import { useFragment } from 'react-relay';
 
+import { graphql } from 'babel-plugin-relay/macro';
+
+import Report from '@mui/icons-material/Report';
+import { useTheme } from '@mui/material';
 import Avatar from '@mui/material/Avatar';
 import Chip from '@mui/material/Chip';
-import Report from '@mui/icons-material/Report';
 
-import { createFragmentContainer } from 'react-relay';
-import { graphql } from 'babel-plugin-relay/macro';
-import { TaskOptionalChip_task } from './__generated__/TaskOptionalChip_task.graphql';
-import { useTheme } from '@mui/material';
+import { TaskOptionalChip_task$key } from './__generated__/TaskOptionalChip_task.graphql';
 
 interface Props {
-  task: TaskOptionalChip_task;
+  task: TaskOptionalChip_task$key;
   className?: string;
 }
 
-function TaskOptionalChip(props: Props) {
+export default function TaskOptionalChip(props: Props) {
+  let task = useFragment(
+    graphql`
+      fragment TaskOptionalChip_task on Task {
+        optional
+      }
+    `,
+    props.task,
+  );
+
   let theme = useTheme();
 
-  let { optional } = props.task;
+  let { optional } = task;
   if (!optional) return <div />;
 
   return (
@@ -32,11 +42,3 @@ function TaskOptionalChip(props: Props) {
     />
   );
 }
-
-export default createFragmentContainer(TaskOptionalChip, {
-  task: graphql`
-    fragment TaskOptionalChip_task on Task {
-      optional
-    }
-  `,
-});

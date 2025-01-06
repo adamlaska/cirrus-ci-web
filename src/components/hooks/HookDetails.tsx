@@ -1,50 +1,39 @@
-import React, { MouseEventHandler } from 'react';
-
-import { commitMutation, createFragmentContainer } from 'react-relay';
-import { WithStyles } from '@mui/styles';
-import createStyles from '@mui/styles/createStyles';
-import withStyles from '@mui/styles/withStyles';
-import { graphql } from 'babel-plugin-relay/macro';
-import { HookDetails_hook } from './__generated__/HookDetails_hook.graphql';
-import { Helmet as Head } from 'react-helmet';
-import { Card, CardContent } from '@mui/material';
-import RepositoryNameChip from '../chips/RepositoryNameChip';
-import BuildBranchNameChip from '../chips/BuildBranchNameChip';
-import BuildChangeChip from '../chips/BuildChangeChip';
-import TaskNameChip from '../chips/TaskNameChip';
-import HookCreatedChip from '../chips/HookCreatedChip';
-import Typography from '@mui/material/Typography';
-import Logs from '../logs/Logs';
-import HookStatusChip from '../chips/HookStatusChip';
-import CirrusFavicon from '../common/CirrusFavicon';
-import classNames from 'classnames';
-import { useNotificationColor } from '../../utils/colors';
-import CardActions from '@mui/material/CardActions';
-import Button from '@mui/material/Button';
-import { navigateBuildHelper, navigateHookHelper, navigateTaskHelper } from '../../utils/navigateHelper';
-import ArrowBack from '@mui/icons-material/ArrowBack';
-import { hasWritePermissions } from '../../utils/permissions';
-import Refresh from '@mui/icons-material/Refresh';
-import environment from '../../createRelayEnvironment';
-import {
-  HookDetailsRerunMutationResponse,
-  HookDetailsRerunMutationVariables,
-} from './__generated__/HookDetailsRerunMutation.graphql';
-import RepositoryOwnerChip from '../chips/RepositoryOwnerChip';
+import React, { MouseEventHandler, useEffect } from 'react';
+import { useFragment, useMutation } from 'react-relay';
 import { useNavigate } from 'react-router-dom';
 
-const hooksRerunMutation = graphql`
-  mutation HookDetailsRerunMutation($input: HooksReRunInput!) {
-    rerunHooks(input: $input) {
-      newHooks {
-        id
-      }
-    }
-  }
-`;
+import { graphql } from 'babel-plugin-relay/macro';
+import classNames from 'classnames';
 
-const styles = theme =>
-  createStyles({
+import ArrowBack from '@mui/icons-material/ArrowBack';
+import Refresh from '@mui/icons-material/Refresh';
+import { Card, CardContent } from '@mui/material';
+import Button from '@mui/material/Button';
+import CardActions from '@mui/material/CardActions';
+import Typography from '@mui/material/Typography';
+import { makeStyles } from '@mui/styles';
+
+import BuildBranchNameChip from 'components/chips/BuildBranchNameChip';
+import BuildChangeChip from 'components/chips/BuildChangeChip';
+import HookCreatedChip from 'components/chips/HookCreatedChip';
+import HookStatusChip from 'components/chips/HookStatusChip';
+import RepositoryNameChip from 'components/chips/RepositoryNameChip';
+import RepositoryOwnerChip from 'components/chips/RepositoryOwnerChip';
+import TaskNameChip from 'components/chips/TaskNameChip';
+import CirrusFavicon from 'components/common/CirrusFavicon';
+import Logs from 'components/logs/Logs';
+import { useNotificationColor } from 'utils/colors';
+import { navigateBuildHelper, navigateHookHelper, navigateTaskHelper } from 'utils/navigateHelper';
+import { hasWritePermissions } from 'utils/permissions';
+
+import {
+  HookDetailsRerunMutation,
+  HookDetailsRerunMutation$data,
+} from './__generated__/HookDetailsRerunMutation.graphql';
+import { HookDetails_hook$key } from './__generated__/HookDetails_hook.graphql';
+
+const useStyles = makeStyles(theme => {
+  return {
     gap: {
       paddingTop: theme.spacing(2),
     },
@@ -66,19 +55,62 @@ const styles = theme =>
     potentialError: {
       padding: theme.spacing(1),
     },
-  });
+  };
+});
 
-interface Props extends WithStyles<typeof styles> {
-  hook: HookDetails_hook;
+interface Props {
+  hook: HookDetails_hook$key;
 }
 
-function HookDetails(props: Props) {
-  let { hook, classes } = props;
+export default function HookDetails(props: Props) {
+  let hook = useFragment(
+    graphql`
+      fragment HookDetails_hook on Hook {
+        id
+        repository {
+          ...RepositoryOwnerChip_repository
+          ...RepositoryNameChip_repository
+        }
+        build {
+          id
+          viewerPermission
+          ...BuildBranchNameChip_build
+          ...BuildChangeChip_build
+        }
+        task {
+          id
+          ...TaskNameChip_task
+        }
+        ...HookCreatedChip_hook
+        ...HookStatusChip_hook
+        name
+        info {
+          error
+          arguments
+          outputLogs
+          environment
+        }
+      }
+    `,
+    props.hook,
+  );
+
+  const [commitDetailsRerunMutation, isInFlight] = useMutation<HookDetailsRerunMutation>(graphql`
+    mutation HookDetailsRerunMutation($input: HooksReRunInput!) {
+      rerunHooks(input: $input) {
+        newHooks {
+          id
+        }
+      }
+    }
+  `);
+
+  let classes = useStyles();
 
   let navigate = useNavigate();
 
   // Parse and prettify hook I/O
-  let hookArguments = JSON.parse(props.hook.info.arguments);
+  let hookArguments = JSON.parse(hook.info.arguments);
   let prettyHookArguments = JSON.stringify(hookArguments, null, 2);
 
   // Extract hook-specific data
@@ -89,7 +121,7 @@ function HookDetails(props: Props) {
   if (hook.name.startsWith('on_task')) {
     targetName = 'Task';
     targetState = hookArguments[0].payload.data.task.status;
-    navigateToAllHooks = e => navigateTaskHelper(navigate, e, hook.task.id, true);
+    navigateToAllHooks = e => navigateTaskHelper(navigate, e, hook.task!.id, true);
   }
 
   if (hook.name.startsWith('on_build')) {
@@ -110,58 +142,62 @@ function HookDetails(props: Props) {
     hook.info.error === '' ? null : (
       <div className={classNames('container', classes.gap)}>
         <div
-          key={props.hook.info.error}
+          key={hook.info.error}
           style={headerStyle}
           className={classNames('row', 'justify-content-between', 'align-items-center')}
         >
           <Typography variant="subtitle1" className={classes.potentialError}>
-            {props.hook.info.error}
+            {hook.info.error}
           </Typography>
         </div>
       </div>
     );
 
   function rerunHook(hookId: string) {
-    const variables: HookDetailsRerunMutationVariables = {
-      input: {
-        clientMutationId: 'rerun-' + hookId,
-        hookIds: [hookId],
+    commitDetailsRerunMutation({
+      variables: {
+        input: {
+          clientMutationId: 'rerun-' + hookId,
+          hookIds: [hookId],
+        },
       },
-    };
-
-    commitMutation(environment, {
-      mutation: hooksRerunMutation,
-      variables: variables,
-      onCompleted: (response: HookDetailsRerunMutationResponse) => {
-        navigateHookHelper(navigate, null, response.rerunHooks.newHooks[0].id);
+      onCompleted: (response: HookDetailsRerunMutation$data, error) => {
+        if (error) {
+          console.log(error);
+          return;
+        }
+        if (response.rerunHooks) {
+          navigateHookHelper(navigate, null, response.rerunHooks.newHooks[0].id);
+        }
       },
       onError: err => console.error(err),
     });
   }
 
   let rerunButton = !hasWritePermissions(hook.build.viewerPermission) ? null : (
-    <Button variant="contained" onClick={() => rerunHook(hook.id)} startIcon={<Refresh />}>
+    <Button variant="contained" onClick={() => rerunHook(hook.id)} startIcon={<Refresh />} disabled={isInFlight}>
       Re-Run
     </Button>
   );
 
   const executionLogs =
-    props.hook.info.outputLogs.length === 0 ? (
+    hook.info.outputLogs.length === 0 ? (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <span>
           There doesn't seem to be anything here. Try generating some logs with <code>print()</code>!
         </span>
       </div>
     ) : (
-      <Logs logsName="output" logs={props.hook.info.outputLogs.join('\n')} />
+      <Logs logsName="output" logs={hook.info.outputLogs.join('\n')} />
     );
+
+  useEffect(() => {
+    document.title = `${targetName} hook - Cirrus CI`;
+  }, [targetName]);
 
   return (
     <div>
       <CirrusFavicon status={hook.info.error === ''} />
-      <Head>
-        <title>{targetName} hook - Cirrus CI</title>
-      </Head>
       <Card elevation={24}>
         <CardContent>
           <div className={classes.wrapper}>
@@ -210,41 +246,9 @@ function HookDetails(props: Props) {
       <Card elevation={24}>
         <CardContent>
           <Typography variant="h6">Environment variables</Typography>
-          <pre className={classNames(classes.io, 'log-line')}>{props.hook.info.environment.join('\n')}</pre>
+          <pre className={classNames(classes.io, 'log-line')}>{hook.info.environment.join('\n')}</pre>
         </CardContent>
       </Card>
     </div>
   );
 }
-
-export default createFragmentContainer(withStyles(styles)(HookDetails), {
-  hook: graphql`
-    fragment HookDetails_hook on Hook {
-      id
-      repository {
-        ...RepositoryOwnerChip_repository
-        ...RepositoryNameChip_repository
-      }
-      build {
-        id
-        viewerPermission
-        ...BuildBranchNameChip_build
-        ...BuildChangeChip_build
-      }
-      task {
-        id
-        ...TaskNameChip_task
-      }
-      ...HookCreatedChip_hook
-      ...HookStatusChip_hook
-      name
-      info {
-        error
-        arguments
-        result
-        outputLogs
-        environment
-      }
-    }
-  `,
-});

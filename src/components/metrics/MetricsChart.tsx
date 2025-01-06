@@ -1,27 +1,30 @@
 import React, { useState } from 'react';
-import { graphql } from 'babel-plugin-relay/macro';
-import Typography from '@mui/material/Typography';
-import { WithStyles } from '@mui/styles';
-import createStyles from '@mui/styles/createStyles';
-import withStyles from '@mui/styles/withStyles';
-import { createFragmentContainer } from 'react-relay';
-import 'react-vis/dist/style.css';
+import { useFragment } from 'react-relay';
 import { FlexibleWidthXYPlot, Hint, LineSeries, VerticalGridLines, XAxis, YAxis } from 'react-vis';
+import 'react-vis/dist/style.css';
+
+import { graphql } from 'babel-plugin-relay/macro';
+
 import Chip from '@mui/material/Chip';
-import { formatDuration } from '../../utils/time';
-import { MetricsChart_chart } from './__generated__/MetricsChart_chart.graphql';
+import Typography from '@mui/material/Typography';
+import { makeStyles } from '@mui/styles';
 
-const styles = theme =>
-  createStyles({
+import { formatDuration } from 'utils/time';
+
+import { MetricsChart_chart$key } from './__generated__/MetricsChart_chart.graphql';
+
+const useStyles = makeStyles(theme => {
+  return {
     title: { 'text-align': 'center' },
-  });
+  };
+});
 
-interface Props extends WithStyles<typeof styles> {
-  chart: MetricsChart_chart;
+interface Props {
+  chart: MetricsChart_chart$key;
 }
 
-function intervals(intervalIncrement, maxValue) {
-  let result = [];
+function intervals(intervalIncrement: number, maxValue: number) {
+  let result: Array<number> = [];
   let value = intervalIncrement;
   while (value < maxValue) {
     result.push(value);
@@ -30,23 +33,40 @@ function intervals(intervalIncrement, maxValue) {
   return result;
 }
 
-function MetricsChart(props: Props) {
+export default function MetricsChart(props: Props) {
   let [hoveredPointIndex, setHoveredPointIndex] = useState(null);
-  let { chart, classes } = props;
+  let classes = useStyles();
+  let chart = useFragment(
+    graphql`
+      fragment MetricsChart_chart on MetricsChart {
+        title
+        dataUnits
+        points {
+          date {
+            year
+            month
+            day
+          }
+          value
+        }
+      }
+    `,
+    props.chart,
+  );
 
   function _onNearestX(value, { index }) {
     setHoveredPointIndex(index);
   }
 
   function formatValue(value) {
-    if (props.chart.dataUnits === 'seconds') {
+    if (chart.dataUnits === 'seconds') {
       return formatDuration(value);
     }
     return value;
   }
 
   function intermediateValues() {
-    let points = props.chart.points || [];
+    let points = chart.points || [];
     let maxValue = 0;
     for (let point of points) {
       if (maxValue < point.value) {
@@ -54,7 +74,7 @@ function MetricsChart(props: Props) {
       }
     }
 
-    if (props.chart.dataUnits === 'seconds') {
+    if (chart.dataUnits === 'seconds') {
       if (maxValue < 60) return null;
       // 10 minutes
       if (maxValue < 10 * 60) return intervals(60, maxValue);
@@ -77,7 +97,7 @@ function MetricsChart(props: Props) {
   let chartData = points.map(function (point, index) {
     return { x: index, y: point.value };
   });
-  let chartDateTicks = [];
+  let chartDateTicks: Array<number> = [];
   for (let i = 0; i < points.length; ++i) {
     let point = points[i];
     let pointDate = new Date(point.date.year, point.date.month - 1, point.date.day);
@@ -87,7 +107,7 @@ function MetricsChart(props: Props) {
     }
   }
 
-  let hint = null;
+  let hint: null | JSX.Element = null;
   if (hoveredPointIndex) {
     let hoveredPoint = points[hoveredPointIndex];
     let date = new Date(hoveredPoint.date.year, hoveredPoint.date.month - 1, hoveredPoint.date.day);
@@ -118,20 +138,3 @@ function MetricsChart(props: Props) {
     </div>
   );
 }
-
-export default createFragmentContainer(withStyles(styles)(MetricsChart), {
-  chart: graphql`
-    fragment MetricsChart_chart on MetricsChart {
-      title
-      dataUnits
-      points {
-        date {
-          year
-          month
-          day
-        }
-        value
-      }
-    }
-  `,
-});

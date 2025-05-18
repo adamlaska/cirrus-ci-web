@@ -14,7 +14,7 @@ ENV NODE_OPTIONS=--openssl-legacy-provider
 ADD . /tmp/cirrus-ci-web/
 RUN yarn bootstrap && yarn build && rm -rf build/service-worker.js
 
-FROM node:current-alpine
+FROM node:23.11.1-alpine3.21
 
 WORKDIR /svc/cirrus-ci-web
 EXPOSE 8080
